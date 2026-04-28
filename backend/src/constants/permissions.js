@@ -1,0 +1,85 @@
+const { ROLES } = require("./roles");
+
+// Permission strings are intentionally simple and route-agnostic.
+// Routes can enforce either role checks or permission checks.
+const PERMISSIONS = {
+  USERS_READ: "users:read",
+  USERS_MANAGE: "users:manage",
+
+  NEEDS_READ: "needs:read",
+  NEEDS_CREATE: "needs:create",
+  NEEDS_VERIFY: "needs:verify",
+
+  TASKS_READ: "tasks:read",
+  TASKS_CREATE: "tasks:create",
+  TASKS_ASSIGN: "tasks:assign",
+  TASKS_EXECUTE: "tasks:execute",
+
+  REPORTS_VERIFY: "reports:verify",
+
+  GEO_READ: "geo:read",
+  GEO_WRITE: "geo:write",
+
+  IMPACT_READ: "impact:read",
+  IMPACT_WRITE: "impact:write",
+
+  FILES_READ: "files:read",
+  FILES_WRITE: "files:write"
+};
+
+const ROLE_PERMISSIONS = {
+  [ROLES.SUPER_ADMIN]: Object.values(PERMISSIONS),
+
+  [ROLES.NGO_ADMIN]: [
+    PERMISSIONS.USERS_READ,
+    PERMISSIONS.USERS_MANAGE,
+    PERMISSIONS.NEEDS_READ,
+    PERMISSIONS.NEEDS_CREATE,
+    PERMISSIONS.TASKS_READ,
+    PERMISSIONS.TASKS_CREATE,
+    PERMISSIONS.TASKS_ASSIGN,
+    PERMISSIONS.GEO_READ,
+    PERMISSIONS.GEO_WRITE,
+    PERMISSIONS.IMPACT_READ,
+    PERMISSIONS.IMPACT_WRITE,
+    PERMISSIONS.FILES_READ,
+    PERMISSIONS.FILES_WRITE
+  ],
+
+  // Coordinator (mapped to existing "Field Coordinator" role constant)
+  [ROLES.FIELD_COORDINATOR]: [
+    PERMISSIONS.USERS_READ,
+    PERMISSIONS.NEEDS_READ,
+    PERMISSIONS.NEEDS_CREATE,
+    PERMISSIONS.TASKS_READ,
+    PERMISSIONS.TASKS_CREATE,
+    PERMISSIONS.TASKS_ASSIGN,
+    PERMISSIONS.GEO_READ,
+    PERMISSIONS.GEO_WRITE,
+    PERMISSIONS.IMPACT_READ,
+    PERMISSIONS.FILES_READ,
+    PERMISSIONS.FILES_WRITE
+  ],
+
+  [ROLES.VOLUNTEER]: [
+    PERMISSIONS.NEEDS_READ,
+    PERMISSIONS.TASKS_READ,
+    PERMISSIONS.TASKS_EXECUTE,
+    PERMISSIONS.GEO_READ,
+    PERMISSIONS.IMPACT_READ,
+    PERMISSIONS.FILES_READ,
+    PERMISSIONS.FILES_WRITE
+  ],
+
+  [ROLES.VERIFIER]: [
+    PERMISSIONS.NEEDS_READ,
+    PERMISSIONS.NEEDS_VERIFY,
+    PERMISSIONS.REPORTS_VERIFY,
+    PERMISSIONS.GEO_READ,
+    PERMISSIONS.IMPACT_READ,
+    PERMISSIONS.FILES_READ
+  ]
+};
+
+module.exports = { PERMISSIONS, ROLE_PERMISSIONS };
+

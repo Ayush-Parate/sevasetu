@@ -39,7 +39,7 @@ interface ApiResponse<T> {
 }
 
 const ACCESS_TOKEN_KEY = "needgraph.accessToken";
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "/api/v1").replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "/_/backend/api/v1").replace(/\/$/, "");
 
 function getAccessToken() {
   return window.localStorage.getItem(ACCESS_TOKEN_KEY);

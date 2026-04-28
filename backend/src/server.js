@@ -24,33 +24,28 @@ async function ensureInitialized() {
   return initPromise;
 }
 
-const isServerless =
-  Boolean(process.env.VERCEL) ||
-  Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME) ||
-  Boolean(process.env.NOW_REGION);
+// Always export a handler so serverless platforms can invoke it safely.
+module.exports = async (req, res) => {
+  try {
+    await ensureInitialized();
+    return app(req, res);
+  } catch (error) {
+    logger.error("Request handler initialization failed", { message: error?.message });
+    res.status(500).json({ success: false, message: "Backend initialization failed" });
+  }
+};
 
-if (isServerless) {
-  module.exports = async (req, res) => {
-    try {
-      await ensureInitialized();
-      return app(req, res);
-    } catch (error) {
-      logger.error("Serverless handler initialization failed", { message: error?.message });
-      res.status(500).json({ success: false, message: "Backend initialization failed" });
-    }
-  };
-} else {
-  async function bootstrap() {
+// When run directly (local/dev), start the HTTP listener.
+if (require.main === module) {
+  (async () => {
     try {
       await ensureInitialized();
       app.listen(PORT, () => {
         logger.info(`Server listening on port ${PORT}`);
       });
     } catch (error) {
-      logger.error("Failed to bootstrap server", { message: error.message });
+      logger.error("Failed to bootstrap server", { message: error?.message });
       process.exit(1);
     }
-  }
-
-  bootstrap();
+  })();
 }

@@ -22,6 +22,7 @@ import {
   Bar,
   Cell
 } from "recharts";
+import RoleLiveMap from "../RoleLiveMap";
 
 const impactData = [
   { month: "Jan", impact: 4500, funding: 2400 },
@@ -165,6 +166,8 @@ export default function DonorOverview() {
           </div>
         </div>
       </div>
+
+      <RoleLiveMap height={320} title="CSR Impact Geography Map" />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Recent Verification Logs */}

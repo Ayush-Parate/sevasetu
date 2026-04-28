@@ -28,6 +28,7 @@ import {
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
 } from "recharts";
+import RoleLiveMap from "./RoleLiveMap";
 
 const trendData = [
   { day: "Mon", urgent: 120, resolved: 80 },
@@ -295,73 +296,10 @@ export default function GlobalHeatmap() {
           </div>
 
           {/* Map Visualization Area */}
-          <div
-            className={`flex-1 rounded-3xl border shadow-inner relative overflow-hidden transition-all duration-700 ${
-              emergencyMode
-                ? "bg-slate-950 border-rose-900/50"
-                : "bg-slate-900 border-slate-800"
-            }`}
-          >
-            {/* Map Grid Background */}
-            <div
-              className="absolute inset-0 opacity-20"
-              style={{
-                backgroundImage:
-                  "radial-gradient(#94a3b8 1px, transparent 1px)",
-                backgroundSize: "30px 30px",
-              }}
-            ></div>
-
-            {/* Simulated Map Regions and Blurs */}
-            <div
-              className={`absolute top-1/4 left-1/4 w-96 h-96 rounded-full blur-[100px] transition-colors duration-1000 ${emergencyMode ? "bg-rose-600/30" : "bg-brand-green/10"}`}
-            ></div>
-            <div
-              className={`absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full blur-[100px] transition-colors duration-1000 ${emergencyMode ? "bg-rose-900/40" : "bg-indigo-500/10"}`}
-            ></div>
-            <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-amber-500/10 rounded-full blur-[80px] -translate-x-1/2 -translate-y-1/2"></div>
-
-            {/* Markers */}
-            <div className="absolute top-[30%] left-[40%] flex flex-col items-center">
-              <div className="w-5 h-5 bg-rose-500 rounded-full shadow-[0_0_0_8px_rgba(244,63,94,0.3)] animate-pulse"></div>
-              <div className="bg-slate-900/90 backdrop-blur border border-slate-700 px-3 py-1.5 rounded-lg mt-3 text-center shadow-xl">
-                <div className="text-white text-xs font-bold">
-                  Severity: Critical
-                </div>
-                <div className="text-slate-400 text-[10px]">
-                  Medical Emergency
-                </div>
-              </div>
-            </div>
-
-            <div className="absolute top-[60%] left-[25%] flex flex-col items-center">
-              <div
-                className={`w-4 h-4 rounded-full shadow-[0_0_0_6px_rgba(245,158,11,0.2)] ${emergencyMode ? "bg-amber-600/20 shadow-none" : "bg-amber-500"}`}
-              ></div>
-              {!emergencyMode && (
-                <div className="text-amber-500 text-[10px] font-bold mt-2 bg-slate-900/50 px-2 py-0.5 rounded backdrop-blur">
-                  High Priority
-                </div>
-              )}
-            </div>
-
-            <div className="absolute top-[45%] left-[70%] flex flex-col items-center">
-              <div
-                className={`w-3 h-3 rounded-full ${emergencyMode ? "bg-slate-800" : "bg-brand-green shadow-[0_0_0_4px_rgba(16,185,129,0.2)]"}`}
-              ></div>
-            </div>
-
-            <div className="absolute top-[20%] left-[60%] flex flex-col items-center">
-              <div className="w-6 h-6 bg-rose-600 rounded-full shadow-[0_0_0_10px_rgba(225,29,72,0.4)] animate-pulse flex items-center justify-center text-white">
-                <Flame size={12} />
-              </div>
-              <div className="bg-rose-900/90 border border-rose-500 px-3 py-1.5 rounded-lg mt-4 text-center shadow-xl animate-pulse">
-                <div className="text-white text-xs font-bold tracking-widest uppercase">
-                  Disaster Level 4
-                </div>
-              </div>
-            </div>
-          </div>
+          <RoleLiveMap
+            height={460}
+            title={emergencyMode ? "National Crisis Map • Emergency Mode" : "National Community Need Map"}
+          />
         </div>
 
         {/* Right: Filters */}

@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   History
 } from "lucide-react";
+import RoleLiveMap from "../RoleLiveMap";
 
 export default function VerifierOverview({ setActiveTab }: { setActiveTab: (tab: any) => void }) {
   const cards = [
@@ -150,6 +151,8 @@ export default function VerifierOverview({ setActiveTab }: { setActiveTab: (tab:
            </motion.div>
          ))}
       </div>
+
+      <RoleLiveMap height={320} title="Verifier Hotspot Validation Map" />
 
       {/* Critical Alerts Strip */}
       <div className="bg-slate-900 p-12 rounded-[4rem] text-white flex flex-col lg:flex-row items-center justify-between gap-12 relative overflow-hidden shadow-2xl">

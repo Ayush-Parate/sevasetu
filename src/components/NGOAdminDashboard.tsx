@@ -40,6 +40,7 @@ import PartnerCollaboration from "./ngo/PartnerCollaboration";
 import DonorCSRReports from "./ngo/DonorCSRReports";
 import NGOSettings from "./ngo/Settings";
 import EmergencyEscalationCenter from "./EmergencyEscalationCenter";
+import RoleLiveMap from "./RoleLiveMap";
 
 // Sub-components would be created in reality, but for now we'll mock them
 // and build a rich "Mission Control Overview"
@@ -404,31 +405,7 @@ export default function NGOAdminDashboard({
                 View Intelligence Map
               </button>
             </div>
-            <div className="p-0 bg-slate-900 h-[300px] relative overflow-hidden flex items-center justify-center">
-              {/* Decorative Map Placeholder */}
-              <div
-                className="absolute inset-0 opacity-20"
-                style={{
-                  backgroundImage:
-                    "radial-gradient(circle at 50% 50%, #5D8D70 2px, transparent 2px)",
-                  backgroundSize: "30px 30px",
-                }}
-              ></div>
-              <div className="absolute z-10 flex flex-col items-center gap-3">
-                <MapIcon className="text-brand-green/50 animate-bounce" size={48} />
-                <p className="text-slate-400 text-sm font-semibold text-center max-w-sm">
-                  Live Geospatial Need Intelligence is mapping 12 active zones.
-                  <br />
-                  <span className="text-xs text-slate-500">
-                    Connecting to API endpoints...
-                  </span>
-                </p>
-              </div>
-              {/* Blips */}
-              <div className="absolute top-1/4 left-1/4 w-4 h-4 bg-rose-500 rounded-full animate-ping"></div>
-              <div className="absolute top-1/4 left-1/4 w-4 h-4 bg-rose-500 rounded-full"></div>
-              <div className="absolute bottom-1/3 right-1/3 w-3 h-3 bg-amber-500 rounded-full animate-ping"></div>
-            </div>
+            <RoleLiveMap height={320} title="Live Needs Radar Map" />
             <div className="p-4 bg-white grid grid-cols-3 divide-x divide-slate-100 text-center">
               <div className="px-2">
                 <div className="text-xl font-bold text-slate-900">
@@ -652,7 +629,7 @@ export default function NGOAdminDashboard({
         <div className="p-8 border-b border-slate-50 shrink-0">
           <div className="flex items-center gap-1 group cursor-pointer mb-2">
             <span className="text-xl font-bold text-slate-900 tracking-tight">
-              NeedGraph<span className="text-brand-green">OS</span>
+              Sevasetu
             </span>
           </div>
           <div className="flex items-center gap-2 mt-4 text-xs font-semibold text-slate-400 uppercase tracking-widest">

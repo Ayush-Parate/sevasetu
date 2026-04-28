@@ -15,6 +15,7 @@ import {
   Maximize2
 } from "lucide-react";
 import { useToast } from "./Toast";
+import RoleLiveMap from "./RoleLiveMap";
 
 export default function MapIntelligence() {
   const { showToast } = useToast();
@@ -55,86 +56,7 @@ export default function MapIntelligence() {
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-12">
          {/* Map Interface */}
          <div className="xl:col-span-3">
-            <div className="bg-slate-100 rounded-[5rem] aspect-[16/9] relative overflow-hidden shadow-inner border-[12px] border-white shadow-2xl group">
-               {/* Grid Pattern */}
-               <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
-               
-               {/* Fictional Map Texture */}
-               <div className="absolute inset-0 grayscale opacity-20 pointer-events-none mix-blend-multiply">
-                  <img src="https://images.unsplash.com/photo-1548345666-a5772829e225?q=80&w=2000&auto=format&fit=crop" alt="Map Texture" className="w-full h-full object-cover" />
-               </div>
-
-               {/* Map Indicators (Pins) */}
-               {hotspots.map((point) => (
-                 <motion.div
-                   key={point.id}
-                   initial={{ scale: 0 }}
-                   animate={{ scale: 1 }}
-                   transition={{ delay: point.id * 0.1, type: "spring" }}
-                   className="absolute group/pin cursor-pointer z-20"
-                   style={{ left: point.x, top: point.y }}
-                   onClick={() => showToast(`Region Trace: ${point.name} - ${point.type} Need Detected.`, "info")}
-                 >
-                    <div className="relative">
-                       {/* Pulse Effect */}
-                       <div className={`absolute inset-0 rounded-full animate-ping opacity-20 ${point.level === 'Critical' ? 'bg-rose-500' : point.level === 'High' ? 'bg-amber-500' : 'bg-blue-500'}`}></div>
-                       
-                       <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-2xl transition-all group-hover/pin:scale-125 group-hover/pin:-translate-y-4 ${
-                         point.level === 'Critical' ? 'bg-rose-500 rotate-45' : 
-                         point.level === 'High' ? 'bg-amber-500 rotate-12' : 
-                         'bg-brand-green -rotate-12'
-                       }`}>
-                          <div className={point.level === 'Critical' ? '-rotate-45' : point.level === 'High' ? '-rotate-12' : 'rotate-12'}>
-                             <AlertTriangle size={20} />
-                          </div>
-                       </div>
-
-                       {/* Tooltip */}
-                       <div className="absolute top-full mt-4 left-1/2 -translate-x-1/2 bg-slate-900 text-white p-5 rounded-3xl whitespace-nowrap opacity-0 group-hover/pin:opacity-100 transition-all shadow-2xl pointer-events-none scale-50 group-hover/pin:scale-100 min-w-[200px]">
-                          <div className="flex items-center justify-between mb-2">
-                             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{point.type} Need</span>
-                             <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest ${point.level === 'Critical' ? 'bg-rose-500/20 text-rose-400' : 'bg-amber-500/20 text-amber-400'}`}>{point.level}</span>
-                          </div>
-                          <h5 className="text-sm font-bold tracking-tight mb-1">{point.name}</h5>
-                          <div className="text-[9px] text-slate-500 italic flex items-center gap-2">
-                             <Users size={12} /> 12 Reports in last 2h
-                          </div>
-                       </div>
-                    </div>
-                 </motion.div>
-               ))}
-
-               {/* Map Controls */}
-               <div className="absolute top-10 right-10 flex flex-col gap-3">
-                  <button className="w-14 h-14 bg-white/90 backdrop-blur-md rounded-2xl flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-xl transition-all"><Compass size={24} /></button>
-                  <button className="w-14 h-14 bg-white/90 backdrop-blur-md rounded-2xl flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-xl transition-all font-black text-xl">+</button>
-                  <button className="w-14 h-14 bg-white/90 backdrop-blur-md rounded-2xl flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-xl transition-all font-black text-xl">-</button>
-               </div>
-
-               {/* Overlay Legend */}
-               <div className="absolute bottom-10 left-10 p-8 bg-slate-900/95 backdrop-blur-md rounded-3xl text-white shadow-2xl border border-white/10 space-y-6">
-                  <h4 className="text-xs font-black uppercase tracking-widest italic flex items-center gap-2">
-                     Intelligence Layers <Layers size={14} className="text-brand-green" />
-                  </h4>
-                  <div className="space-y-4">
-                     {[
-                       { id: "needs", label: "Critical Needs", color: "bg-rose-500" },
-                       { id: "vols", label: "Volunteer Presence", color: "bg-brand-green" },
-                       { id: "gaps", label: "Coverage Gaps", color: "bg-amber-500" },
-                       { id: "risk", label: "Climate Risk Index", color: "bg-blue-500" },
-                     ].map(l => (
-                        <button 
-                          key={l.id}
-                          onClick={() => setActiveLayer(l.id)}
-                          className={`flex items-center gap-4 w-full p-2 rounded-xl transition-all ${activeLayer === l.id ? 'bg-white/10' : 'opacity-40 hover:opacity-100'}`}
-                        >
-                           <div className={`w-3 h-3 rounded-full ${l.color}`}></div>
-                           <span className="text-[10px] font-bold uppercase tracking-tight">{l.label}</span>
-                        </button>
-                     ))}
-                  </div>
-               </div>
-            </div>
+            <RoleLiveMap height={520} title="Geo Intelligence Live Map" />
          </div>
 
          {/* Sidebar Stats */}

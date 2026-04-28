@@ -28,6 +28,7 @@ import CommunityCommunicationHub from "./fc/CommunityCommunicationHub";
 import ProofVerificationCenter from "./fc/ProofVerificationCenter";
 import LocalAnalyticsDashboard from "./fc/LocalAnalyticsDashboard";
 import FCSettings from "./fc/FCSettings";
+import RoleLiveMap from "./RoleLiveMap";
 
 type DashboardView =
   | "dashboard"
@@ -152,6 +153,8 @@ export default function FieldCoordinatorDashboard({
           </div>
         )})}
       </div>
+
+      <RoleLiveMap height={320} title="Field Coordinator Area Map" />
     </div>
   );
 
@@ -161,7 +164,7 @@ export default function FieldCoordinatorDashboard({
       <aside className="w-80 bg-white border-r border-slate-100 flex flex-col h-full relative z-20">
         <div className="p-8 flex flex-col border-b border-slate-50">
           <div className="flex items-center gap-1 group cursor-pointer">
-            <span className="text-xl font-bold text-slate-800 tracking-tight">NeedGraph<span className="text-brand-green">OS</span></span>
+            <span className="text-xl font-bold text-slate-800 tracking-tight">Sevasetu</span>
             <div className="w-6 h-1 my-auto bg-brand-green rounded-full -ml-1"></div>
           </div>
           <div className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 mt-2">

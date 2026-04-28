@@ -38,6 +38,7 @@ import EmergencyEscalationCenter from "./EmergencyEscalationCenter";
 import Settings from "./Settings";
 import SupportAndGovernance from "./SupportAndGovernance";
 import BillingAndSubscriptionCenter from "./BillingAndSubscriptionCenter";
+import RoleLiveMap from "./RoleLiveMap";
 
 // Types
 type ActiveView =
@@ -251,6 +252,8 @@ export default function SuperAdminDashboard({
         />
       </div>
 
+      <RoleLiveMap height={320} title="Super Admin National Operations Map" />
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Recent Emergencies */}
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
@@ -347,7 +350,7 @@ export default function SuperAdminDashboard({
         <div className="p-8 border-b border-slate-50 shrink-0">
           <div className="flex items-center gap-1 group cursor-pointer mb-2">
             <span className="text-xl font-bold text-slate-900 tracking-tight">
-              NeedGraph<span className="text-brand-green">OS</span>
+              Sevasetu
             </span>
             <div className="w-6 h-1.5 bg-brand-green rounded-full mt-auto -ml-1"></div>
           </div>

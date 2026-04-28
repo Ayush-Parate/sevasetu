@@ -11,7 +11,7 @@ import {
   Mail,
   ArrowLeft,
 } from "lucide-react";
-import { login, type AuthUser } from "../lib/api";
+import { login, signup, type AuthUser } from "../lib/api";
 
 export type Role =
   | "SUPER_ADMIN"
@@ -104,15 +104,19 @@ const ROLES: RoleConfig[] = [
 export default function LoginPage({
   onBack,
   onLoginSuccess,
-  onRequestAccount,
+  onSignupAccount,
+  initialAuthMode,
   initialRole,
 }: {
   onBack: () => void;
   onLoginSuccess: (user: AuthUser) => void;
-  onRequestAccount: (role: Role | null) => void;
+  onSignupAccount: (role: Role | null) => void;
+  initialAuthMode?: "login" | "signup";
   initialRole?: Role | null;
 }) {
   const [selectedRole, setSelectedRole] = useState<Role | null>(initialRole || null);
+  const [authMode, setAuthMode] = useState<"login" | "signup">(initialAuthMode || "login");
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -136,6 +140,34 @@ export default function LoginPage({
       onLoginSuccess(user);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to authenticate");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedRole || !currentRole) return;
+
+    if (selectedRole === "SUPER_ADMIN") {
+      setError("Super Admin uses fixed login credentials and cannot sign up.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError("");
+
+    try {
+      await signup({
+        fullName,
+        email,
+        password,
+        role: currentRole.backendRole as Exclude<AuthUser["role"], "Super Admin">,
+      });
+      const user = await login({ email, password });
+      onLoginSuccess(user);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to sign up");
     } finally {
       setIsSubmitting(false);
     }
@@ -173,7 +205,7 @@ export default function LoginPage({
             role="button"
           >
             <span className="text-3xl font-bold tracking-tight text-white">
-              NeedGraph<span className="text-brand-green">OS</span>
+              Sevasetu
             </span>
           </div>
 
@@ -259,7 +291,7 @@ export default function LoginPage({
                     <div className="flex-1">
                       <h3 className="font-bold text-slate-800">{role.title}</h3>
                       <p className="text-xs text-slate-500">
-                        {role.id.replace("_", " ")}
+                        {role.id.replaceAll("_", " ")}
                       </p>
                     </div>
                     <ArrowRight
@@ -294,12 +326,55 @@ export default function LoginPage({
                     <currentRole.icon size={20} />
                   </div>
                   <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-                    {currentRole?.title} Login
+                    {currentRole?.title} {authMode === "login" ? "Login" : "Signup"}
                   </h1>
                 </div>
               </div>
 
-              <form onSubmit={handleLogin} className="space-y-4">
+              <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode("login");
+                    setError("");
+                  }}
+                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors ${
+                    authMode === "login" ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-900"
+                  }`}
+                >
+                  Login
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode("signup");
+                    onSignupAccount(selectedRole);
+                    setError("");
+                  }}
+                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors ${
+                    authMode === "signup" ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-900"
+                  }`}
+                >
+                  Signup
+                </button>
+              </div>
+
+              <form onSubmit={authMode === "login" ? handleLogin : handleSignup} className="space-y-4">
+                {authMode === "signup" ? (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">
+                      Full Name
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Your full name"
+                      className="w-full px-4 py-3.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green transition-all"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                    />
+                  </div>
+                ) : null}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">
                     Email Address
@@ -366,23 +441,46 @@ export default function LoginPage({
                   className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 hover:-translate-y-0.5 shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:hover:translate-y-0"
                 >
                   <ShieldCheck size={20} />
-                  {isSubmitting ? "Authenticating..." : "Authenticate to Dashboard"}
+                  {isSubmitting
+                    ? authMode === "login"
+                      ? "Authenticating..."
+                      : "Creating account..."
+                    : authMode === "login"
+                    ? "Authenticate to Dashboard"
+                    : "Signup and Continue"}
                 </button>
               </form>
 
               <div className="pt-8 text-center">
                 <p className="text-slate-400 text-sm">
-                  Don't have access?{" "}
+                  {authMode === "login" ? "Don't have access?" : "Already have an account?"}{" "}
                   <button
-                    onClick={() => onRequestAccount(selectedRole)}
+                    onClick={() => {
+                      if (authMode === "login") {
+                        setAuthMode("signup");
+                        onSignupAccount(selectedRole);
+                      } else {
+                        setAuthMode("login");
+                      }
+                      setError("");
+                    }}
                     className="text-slate-900 font-bold hover:underline"
                   >
-                    Request an Account
+                    {authMode === "login" ? "Signup Account" : "Login"}
                   </button>
                 </p>
               </div>
             </motion.div>
           )}
+
+          <div className="pt-10 mt-10 border-t border-slate-200 text-center space-y-2">
+            <p className="text-xs font-semibold text-slate-500 tracking-wide">
+              SevaSetu • Need se Seva Tak
+            </p>
+            <p className="text-[11px] text-slate-400">
+              Privacy Policy • Terms & Governance • Support Center
+            </p>
+          </div>
         </div>
       </div>
     </div>

@@ -6,6 +6,7 @@
 import { motion } from "motion/react";
 import { Search, Gift, User, Play, HandHeart, CheckCircle2, ChevronDown } from "lucide-react";
 import { useState } from "react";
+import { Circle, CircleMarker, MapContainer, Popup, TileLayer } from "react-leaflet";
 import LoginPage, { Role } from "./components/LoginPage";
 import SuperAdminDashboard from "./components/SuperAdminDashboard";
 import NGOAdminDashboard from "./components/NGOAdminDashboard";
@@ -17,23 +18,76 @@ import PublicRequestModal from "./components/PublicRequestModal";
 import { useToast } from "./components/Toast";
 import { logout, type AuthUser } from "./lib/api";
 
+const INDIA_CENTER: [number, number] = [22.9, 79.3];
+const HOTSPOTS = [
+  { name: "Mumbai", position: [19.076, 72.8777] as [number, number], severity: "high", radius: 30000 },
+  { name: "Pune", position: [18.5204, 73.8567] as [number, number], severity: "medium", radius: 24000 },
+  { name: "Nashik", position: [19.9975, 73.7898] as [number, number], severity: "medium", radius: 18000 },
+  { name: "Nagpur", position: [21.1458, 79.0882] as [number, number], severity: "high", radius: 22000 },
+  { name: "Assam", position: [26.2006, 92.9376] as [number, number], severity: "high", radius: 36000 },
+  { name: "Bengaluru", position: [12.9716, 77.5946] as [number, number], severity: "low", radius: 15000 }
+];
+
+const ACTIVE_VOLUNTEERS = [
+  [19.12, 72.88],
+  [18.56, 73.86],
+  [13.02, 77.62],
+  [22.59, 88.36],
+  [17.43, 78.38],
+  [28.63, 77.21]
+] as [number, number][];
+
+function IndiaCrisisMap({ compact = false }: { compact?: boolean }) {
+  return (
+    <div className={`w-full overflow-hidden rounded-2xl border border-slate-200 ${compact ? "h-64" : "h-[420px]"}`}>
+      <MapContainer
+        center={INDIA_CENTER}
+        zoom={5}
+        minZoom={4}
+        maxZoom={11}
+        scrollWheelZoom={false}
+        style={{ height: "100%", width: "100%" }}
+      >
+        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        {HOTSPOTS.map((hotspot) => {
+          const color =
+            hotspot.severity === "high" ? "#ef4444" : hotspot.severity === "medium" ? "#f59e0b" : "#10b981";
+          return (
+            <Circle key={hotspot.name} center={hotspot.position} radius={hotspot.radius} pathOptions={{ color, fillColor: color, fillOpacity: 0.25 }}>
+              <Popup>
+                <strong>{hotspot.name}</strong>
+                <br />
+                {hotspot.severity.toUpperCase()} priority zone
+              </Popup>
+            </Circle>
+          );
+        })}
+        {ACTIVE_VOLUNTEERS.map((position, idx) => (
+          <CircleMarker
+            key={`${position[0]}-${position[1]}-${idx}`}
+            center={position}
+            radius={6}
+            pathOptions={{ color: "#0f766e", fillColor: "#14b8a6", fillOpacity: 0.95 }}
+          >
+            <Popup>Active volunteer node</Popup>
+          </CircleMarker>
+        ))}
+      </MapContainer>
+    </div>
+  );
+}
+
 const Navbar = ({
   onLoginClick,
-  onOpenRequest
+  onSignupClick
 }: {
   onLoginClick: () => void;
-  onOpenRequest: (type: "NGO_REGISTRATION" | "VOLUNTEER_INTEREST") => void;
+  onSignupClick: () => void;
 }) => {
   const allLinks = [
     { name: "HOME", hasDropdown: false },
     { name: "PLATFORM", hasDropdown: true },
     { name: "SOLUTIONS", hasDropdown: true },
-    { name: "IMPACT MAP", hasDropdown: false },
-    { name: "DEMO", hasDropdown: false },
-    { name: "SUCCESS STORIES", hasDropdown: false },
-    { name: "PARTNER NETWORK", hasDropdown: false },
-    { name: "INSIGHTS", hasDropdown: false },
-    { name: "RESOURCES", hasDropdown: true },
     { name: "ABOUT US", hasDropdown: false },
     { name: "CONTACT", hasDropdown: false },
   ];
@@ -43,7 +97,7 @@ const Navbar = ({
       <nav className="max-w-[1600px] mx-auto px-6 py-4 flex items-center justify-between">
         {/* Logo */}
         <div className="flex items-center gap-1 group cursor-pointer mr-8 shrink-0">
-          <span className="text-xl font-bold text-slate-800 tracking-tight">NeedGraph<span className="text-brand-green">OS</span></span>
+          <span className="text-xl font-bold text-slate-800 tracking-tight">Sevasetu</span>
           <div className="w-6 h-1.5 bg-brand-green rounded-full mt-auto -ml-1 transition-all group-hover:w-8"></div>
         </div>
 
@@ -64,21 +118,15 @@ const Navbar = ({
         <div className="flex items-center gap-3 shrink-0 ml-6">
           <button 
             onClick={onLoginClick}
-            className="hidden xl:block text-[9px] 2xl:text-[10px] font-bold tracking-widest text-slate-400 hover:text-brand-green transition-colors uppercase"
-          >
-            LOGIN PORTAL
-          </button>
-          <button
-            onClick={() => onOpenRequest("NGO_REGISTRATION")}
             className="hidden sm:block px-3 py-1.5 text-[9px] 2xl:text-[10px] font-bold tracking-widest text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors uppercase"
           >
-            NGO REGISTRATION
+            LOGIN
           </button>
           <button
-            onClick={() => onOpenRequest("VOLUNTEER_INTEREST")}
+            onClick={onSignupClick}
             className="bg-brand-green text-white px-4 py-2 rounded-lg text-[9px] 2xl:text-[10px] font-bold tracking-widest hover:brightness-110 transition-all shadow-sm uppercase"
           >
-            JOIN AS VOLUNTEER
+            SIGNUP
           </button>
           <div className="w-px h-6 bg-slate-100 mx-1 hidden sm:block"></div>
           <button className="p-2 text-slate-400 hover:text-brand-green transition-colors">
@@ -112,7 +160,7 @@ const Hero = ({ onOpenRequest }: { onOpenRequest: (type: "DONOR_INTEREST" | "DEM
           transition={{ duration: 0.8, delay: 0.2 }}
           className="text-slate-500 max-w-2xl mx-auto mb-10 leading-relaxed text-sm md:text-base opacity-75"
         >
-          Most platforms only manage volunteers. NeedGraph OS reads local community signals, prioritizes urgent needs, and dispatches action. We convert scattered field reports into a live intelligence graph for real social impact.
+          Most platforms only manage volunteers. Sevasetu reads local community signals, prioritizes urgent needs, and dispatches action. We convert scattered field reports into a live intelligence graph for real social impact.
         </motion.p>
 
         <motion.div 
@@ -149,6 +197,15 @@ const Hero = ({ onOpenRequest }: { onOpenRequest: (type: "DONOR_INTEREST" | "DEM
             <span className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">See the Heatmap</span>
           </button>
         </motion.div>
+
+        <div className="mt-12">
+          <div className="mb-4 flex flex-wrap justify-center gap-3 text-xs font-semibold text-slate-500">
+            <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-500" />Red hotspots</span>
+            <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-amber-500" />Emergency zones</span>
+            <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-teal-500" />Active volunteers</span>
+          </div>
+          <IndiaCrisisMap />
+        </div>
       </div>
     </section>
   );
@@ -301,6 +358,10 @@ const IntelligenceGraph = () => {
           </p>
         </div>
 
+        <div className="mb-10">
+          <IndiaCrisisMap compact />
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {steps.map((step) => (
             <motion.div 
@@ -326,9 +387,10 @@ const IntelligenceGraph = () => {
 export default function App() {
   const { showToast } = useToast();
   const [view, setView] = useState<"landing" | "login" | "superadmin" | "ngoadmin" | "field_coordinator" | "volunteer" | "verifier" | "donor">("landing");
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [preferredRole, setPreferredRole] = useState<Role | null>(null);
   const [publicRequestType, setPublicRequestType] = useState<
-    "DEMO_REQUEST" | "NGO_REGISTRATION" | "VOLUNTEER_INTEREST" | "DONOR_INTEREST" | "ACCOUNT_REQUEST" | null
+    "DEMO_REQUEST" | "NGO_REGISTRATION" | "VOLUNTEER_INTEREST" | "DONOR_INTEREST" | null
   >(null);
 
   const handleLogout = async () => {
@@ -352,10 +414,10 @@ export default function App() {
   if (view === "login") {
     return <LoginPage 
       onBack={() => setView("landing")} 
+      initialAuthMode={authMode}
       initialRole={preferredRole}
       onLoginSuccess={handleAuthenticated}
-      onRequestAccount={(role) => {
-        setPublicRequestType("ACCOUNT_REQUEST");
+      onSignupAccount={(role) => {
         setPreferredRole(role);
       }}
     />;
@@ -388,8 +450,14 @@ export default function App() {
   return (
     <main className="min-h-screen selection:bg-brand-green/20 overflow-x-hidden">
       <Navbar
-        onLoginClick={() => setView("login")}
-        onOpenRequest={(type) => setPublicRequestType(type)}
+        onLoginClick={() => {
+          setAuthMode("login");
+          setView("login");
+        }}
+        onSignupClick={() => {
+          setAuthMode("signup");
+          setView("login");
+        }}
       />
       <Hero onOpenRequest={(type) => setPublicRequestType(type)} />
       <ImageGallery />
@@ -401,7 +469,7 @@ export default function App() {
         <div className="max-w-4xl mx-auto px-8 text-center relative z-10">
           <h2 className="text-4xl md:text-6xl tracking-tight font-bold mb-8">Ready to transform community intelligence?</h2>
           <p className="text-slate-400 text-lg mb-12 max-w-2xl mx-auto">
-            Join the 500+ NGOs already using NeedGraph OS to prioritize action and maximize their social footprint.
+            Join the 500+ NGOs already using Sevasetu to prioritize action and maximize their social footprint.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
              <button
@@ -419,6 +487,51 @@ export default function App() {
           </div>
         </div>
       </section>
+
+      <footer className="bg-slate-950 text-slate-300 border-t border-slate-800">
+        <div className="max-w-7xl mx-auto px-8 py-14 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
+          <div>
+            <p className="text-white text-xl font-bold tracking-tight">SevaSetu</p>
+            <p className="text-xs uppercase tracking-[0.2em] text-brand-green mt-2">Need se Seva Tak</p>
+            <p className="text-sm text-slate-400 mt-4 leading-relaxed">
+              India&apos;s intelligent social impact operating system connecting needs to verified action.
+            </p>
+          </div>
+
+          <div>
+            <p className="text-white font-semibold mb-3">Quick Links</p>
+            <ul className="space-y-2 text-sm">
+              <li>Home</li>
+              <li>Platform</li>
+              <li>Solutions</li>
+              <li>Role-Based Login</li>
+            </ul>
+          </div>
+
+          <div>
+            <p className="text-white font-semibold mb-3">Resources</p>
+            <ul className="space-y-2 text-sm">
+              <li>Case Studies</li>
+              <li>Reports</li>
+              <li>Privacy Policy</li>
+              <li>Terms &amp; Governance</li>
+            </ul>
+          </div>
+
+          <div>
+            <p className="text-white font-semibold mb-3">Support</p>
+            <ul className="space-y-2 text-sm">
+              <li>Support Center</li>
+              <li>contact@sevasetu.org</li>
+              <li>+91 90000 00000</li>
+              <li>Follow: LinkedIn • X • YouTube</li>
+            </ul>
+          </div>
+        </div>
+        <div className="border-t border-slate-800 py-4 text-center text-xs text-slate-500">
+          © {new Date().getFullYear()} SevaSetu. All rights reserved.
+        </div>
+      </footer>
       
       {/* Decorative accent */}
       <div className="fixed bottom-0 left-0 w-full h-[15vh] bg-gradient-to-t from-brand-peach/30 to-transparent pointer-events-none -z-10"></div>

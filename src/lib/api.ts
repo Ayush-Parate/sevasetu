@@ -145,6 +145,14 @@ export interface LoginPayload {
   password: string;
 }
 
+export interface SignupPayload {
+  fullName: string;
+  email: string;
+  password: string;
+  role?: Exclude<BackendRole, "Super Admin">;
+  phone?: string;
+}
+
 export async function login(payload: LoginPayload) {
   const data = await request<{ accessToken: string; user: AuthUser }>("/auth/login", {
     method: "POST",
@@ -153,6 +161,13 @@ export async function login(payload: LoginPayload) {
 
   setAccessToken(data.accessToken);
   return data.user;
+}
+
+export async function signup(payload: SignupPayload) {
+  return request<AuthUser>("/auth/register", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  }, false);
 }
 
 export async function logout() {

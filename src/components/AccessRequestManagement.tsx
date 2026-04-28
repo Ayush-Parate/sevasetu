@@ -14,7 +14,7 @@ const ROLE_OPTIONS = [
 ];
 
 function createTempPassword() {
-  return `NeedGraph!${Math.random().toString(36).slice(-8)}A1`;
+  return `Sevasetu!${Math.random().toString(36).slice(-8)}A1`;
 }
 
 export default function AccessRequestManagement() {

@@ -15,6 +15,7 @@ import {
   Compass
 } from "lucide-react";
 import { motion } from "motion/react";
+import RoleLiveMap from "../RoleLiveMap";
 
 interface OverviewCardProps {
   title: string;
@@ -203,6 +204,8 @@ export default function VolunteerOverview({ setActiveTab }: { setActiveTab: (tab
           ))}
         </div>
       </div>
+
+      <RoleLiveMap height={320} title="Volunteer Nearby Need Map" />
       
       {/* Quick Mission Feed */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

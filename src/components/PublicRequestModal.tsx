@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { X } from "lucide-react";
-import { createPublicRequest, type PublicRequestPayload } from "../lib/api";
+import { createPublicRequest, signup, type BackendRole, type PublicRequestPayload } from "../lib/api";
 
 type RequestType = PublicRequestPayload["requestType"];
 
@@ -33,12 +33,20 @@ const REQUEST_COPY: Record<
     organizationLabel: "Company / Foundation"
   },
   ACCOUNT_REQUEST: {
-    title: "Request an Account",
-    subtitle: "Ask for dashboard access and route the request to platform administrators.",
-    submitLabel: "Request Access",
+    title: "Sign up",
+    subtitle: "Create your dashboard account now. You can log in immediately after signup.",
+    submitLabel: "Create Account",
     organizationLabel: "Organization"
   }
 };
+
+const SIGNUP_ROLE_OPTIONS: Array<Exclude<BackendRole, "Super Admin">> = [
+  "Volunteer",
+  "Field Coordinator",
+  "NGO Admin",
+  "Verifier",
+  "Donor"
+];
 
 interface Props {
   requestType: RequestType;
@@ -54,12 +62,14 @@ export default function PublicRequestModal({
   onSuccess
 }: Props) {
   const copy = useMemo(() => REQUEST_COPY[requestType], [requestType]);
+  const isSignup = requestType === "ACCOUNT_REQUEST";
   const [form, setForm] = useState({
     fullName: "",
     email: "",
+    password: "",
     phone: "",
     organizationName: "",
-    roleRequested: defaultRoleRequested || "",
+    roleRequested: defaultRoleRequested || (isSignup ? "Volunteer" : ""),
     message: ""
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -71,17 +81,33 @@ export default function PublicRequestModal({
     setError("");
 
     try {
-      await createPublicRequest({
-        requestType,
-        fullName: form.fullName,
-        email: form.email,
-        phone: form.phone || undefined,
-        organizationName: form.organizationName || undefined,
-        roleRequested: form.roleRequested || undefined,
-        message: form.message || undefined,
-        source: "frontend-modal"
-      });
-      onSuccess(`${copy.title} submitted successfully.`);
+      if (isSignup) {
+        const requestedRole = (SIGNUP_ROLE_OPTIONS.includes(form.roleRequested as any)
+          ? (form.roleRequested as Exclude<BackendRole, "Super Admin">)
+          : "Volunteer");
+
+        await signup({
+          fullName: form.fullName,
+          email: form.email,
+          password: form.password,
+          role: requestedRole,
+          phone: form.phone || undefined
+        });
+
+        onSuccess("Signup successful. Please log in with your new credentials.");
+      } else {
+        await createPublicRequest({
+          requestType,
+          fullName: form.fullName,
+          email: form.email,
+          phone: form.phone || undefined,
+          organizationName: form.organizationName || undefined,
+          roleRequested: form.roleRequested || undefined,
+          message: form.message || undefined,
+          source: "frontend-modal"
+        });
+        onSuccess(`${copy.title} submitted successfully.`);
+      }
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to submit request");
@@ -120,33 +146,61 @@ export default function PublicRequestModal({
               placeholder="Email address"
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-brand-green/20"
             />
+            {isSignup ? (
+              <input
+                required
+                type="password"
+                value={form.password}
+                onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
+                placeholder="Password (min 8 chars)"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-brand-green/20"
+              />
+            ) : null}
             <input
               value={form.phone}
               onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
               placeholder="Phone number"
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-brand-green/20"
             />
-            <input
-              value={form.organizationName}
-              onChange={(e) => setForm((prev) => ({ ...prev, organizationName: e.target.value }))}
-              placeholder={copy.organizationLabel}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-brand-green/20"
-            />
+            {isSignup ? (
+              <select
+                value={form.roleRequested}
+                onChange={(e) => setForm((prev) => ({ ...prev, roleRequested: e.target.value }))}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-brand-green/20"
+              >
+                {SIGNUP_ROLE_OPTIONS.map((role) => (
+                  <option key={role} value={role}>
+                    {role}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                value={form.organizationName}
+                onChange={(e) => setForm((prev) => ({ ...prev, organizationName: e.target.value }))}
+                placeholder={copy.organizationLabel}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-brand-green/20"
+              />
+            )}
           </div>
 
-          <input
-            value={form.roleRequested}
-            onChange={(e) => setForm((prev) => ({ ...prev, roleRequested: e.target.value }))}
-            placeholder="Requested role"
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-brand-green/20"
-          />
+          {!isSignup ? (
+            <input
+              value={form.roleRequested}
+              onChange={(e) => setForm((prev) => ({ ...prev, roleRequested: e.target.value }))}
+              placeholder="Requested role"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-brand-green/20"
+            />
+          ) : null}
 
-          <textarea
-            value={form.message}
-            onChange={(e) => setForm((prev) => ({ ...prev, message: e.target.value }))}
-            placeholder="Tell us what you need"
-            className="w-full min-h-[140px] bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-brand-green/20"
-          />
+          {!isSignup ? (
+            <textarea
+              value={form.message}
+              onChange={(e) => setForm((prev) => ({ ...prev, message: e.target.value }))}
+              placeholder="Tell us what you need"
+              className="w-full min-h-[140px] bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-brand-green/20"
+            />
+          ) : null}
 
           {error ? <p className="text-sm text-rose-600 font-medium">{error}</p> : null}
 

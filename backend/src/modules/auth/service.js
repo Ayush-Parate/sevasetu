@@ -36,7 +36,7 @@ function parseJwtExpiryToDate(expiresIn) {
 }
 
 async function registerPublic(payload) {
-  const existing = await User.findOne({ where: { email: payload.email } });
+  const existing = await User.findOne({ email: payload.email.toLowerCase() });
   if (existing) {
     throw { statusCode: 409, message: "Email already exists" };
   }
@@ -48,7 +48,7 @@ async function registerPublic(payload) {
 }
 
 async function registerAdmin(payload) {
-  const existing = await User.findOne({ where: { email: payload.email } });
+  const existing = await User.findOne({ email: payload.email.toLowerCase() });
   if (existing) throw { statusCode: 409, message: "Email already exists" };
 
   const passwordHash = await bcrypt.hash(payload.password, 10);
@@ -65,13 +65,15 @@ async function issueTokensForUser(user) {
   const refreshTokenHash = await bcrypt.hash(tokenId, 10);
   const refreshTokenExpiresAt = parseJwtExpiryToDate(process.env.JWT_REFRESH_EXPIRES_IN || "7d");
 
-  await user.update({ refreshTokenHash, refreshTokenExpiresAt });
+  user.refreshTokenHash = refreshTokenHash;
+  user.refreshTokenExpiresAt = refreshTokenExpiresAt;
+  await user.save();
 
   return { accessToken, refreshToken };
 }
 
 async function login({ email, password }) {
-  const user = await User.findOne({ where: { email } });
+  const user = await User.findOne({ email: email.toLowerCase() });
   if (!user) {
     throw { statusCode: 401, message: "Invalid credentials" };
   }
@@ -109,21 +111,25 @@ async function refreshTokens(refreshTokenJwt) {
     throw { statusCode: 401, message: "Invalid refresh token" };
   }
 
-  const user = await User.findByPk(decoded.id);
+  const user = await User.findById(decoded.id);
   if (!user) throw { statusCode: 401, message: "User not found" };
   if (!user.isActive) throw { statusCode: 403, message: "User is inactive" };
   if (!user.refreshTokenHash || !user.refreshTokenExpiresAt) {
     throw { statusCode: 401, message: "Refresh token revoked" };
   }
   if (user.refreshTokenExpiresAt.getTime() < Date.now()) {
-    await user.update({ refreshTokenHash: null, refreshTokenExpiresAt: null });
+    user.refreshTokenHash = null;
+    user.refreshTokenExpiresAt = null;
+    await user.save();
     throw { statusCode: 401, message: "Refresh token expired" };
   }
 
   const matches = await bcrypt.compare(decoded.tid, user.refreshTokenHash);
   if (!matches) {
     // Token reuse or rotation mismatch => revoke.
-    await user.update({ refreshTokenHash: null, refreshTokenExpiresAt: null });
+    user.refreshTokenHash = null;
+    user.refreshTokenExpiresAt = null;
+    await user.save();
     throw { statusCode: 401, message: "Refresh token revoked" };
   }
 
@@ -132,9 +138,11 @@ async function refreshTokens(refreshTokenJwt) {
 }
 
 async function logout(userId) {
-  const user = await User.findByPk(userId);
+  const user = await User.findById(userId);
   if (!user) return;
-  await user.update({ refreshTokenHash: null, refreshTokenExpiresAt: null });
+  user.refreshTokenHash = null;
+  user.refreshTokenExpiresAt = null;
+  await user.save();
 }
 
 module.exports = { registerPublic, registerAdmin, login, refreshTokens, logout, signAccessToken };

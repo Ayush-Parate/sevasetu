@@ -3,17 +3,18 @@ const { processUploadedImage } = require("../../utils/ocrService");
 
 async function processFile(file) {
   const ocr = await processUploadedImage(file);
-  return ProcessedFile.create({
+  const record = await ProcessedFile.create({
     originalName: file.originalname,
     storedPath: file.path,
     mimeType: file.mimetype,
     extractedText: ocr.text,
     ocrConfidence: ocr.confidence
   });
+  return record.toJSON();
 }
 
 async function listFiles() {
-  return ProcessedFile.findAll();
+  return ProcessedFile.find({}).sort({ createdAt: -1 }).lean();
 }
 
 async function processTextInput(text) {

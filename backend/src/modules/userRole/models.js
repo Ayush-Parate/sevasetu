@@ -1,30 +1,37 @@
-const { DataTypes } = require("sequelize");
-const { sequelize } = require("../../config/database");
+const { mongoose } = require("../../config/database");
 const { ROLES } = require("../../constants/roles");
 
-const isSqlite = sequelize.getDialect() === "sqlite";
-const stringArrayType = isSqlite ? DataTypes.JSON : DataTypes.ARRAY(DataTypes.STRING);
+const userSchema = new mongoose.Schema(
+  {
+    fullName: { type: String, required: true, trim: true },
+    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    passwordHash: { type: String, required: true },
+    role: { type: String, enum: Object.values(ROLES), required: true },
+    phone: { type: String, default: null },
+    skills: { type: [String], default: [] },
+    languages: { type: [String], default: [] },
+    locationLat: { type: Number, default: null },
+    locationLng: { type: Number, default: null },
+    availabilityStatus: { type: String, default: "unavailable" },
+    trustScore: { type: Number, default: 0 },
+    isActive: { type: Boolean, default: true },
+    refreshTokenHash: { type: String, default: null },
+    refreshTokenExpiresAt: { type: Date, default: null }
+  },
+  {
+    timestamps: true,
+    toJSON: {
+      virtuals: true,
+      versionKey: false,
+      transform: (_doc, ret) => {
+        ret.id = ret._id.toString();
+        delete ret._id;
+        return ret;
+      }
+    }
+  }
+);
 
-const User =
-  sequelize.models.User ||
-  sequelize.define("User", {
-    id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
-    fullName: { type: DataTypes.STRING, allowNull: false },
-    email: { type: DataTypes.STRING, allowNull: false, unique: true },
-    passwordHash: { type: DataTypes.STRING, allowNull: false },
-    role: { type: DataTypes.ENUM(...Object.values(ROLES)), allowNull: false },
-    phone: { type: DataTypes.STRING },
-    skills: { type: stringArrayType, defaultValue: [] },
-    languages: { type: stringArrayType, defaultValue: [] },
-    locationLat: { type: DataTypes.FLOAT },
-    locationLng: { type: DataTypes.FLOAT },
-    availabilityStatus: { type: DataTypes.STRING, defaultValue: "unavailable" },
-    trustScore: { type: DataTypes.FLOAT, defaultValue: 0 },
-    isActive: { type: DataTypes.BOOLEAN, defaultValue: true },
-
-    // Rotating refresh token storage (hashed). Null => logged out everywhere.
-    refreshTokenHash: { type: DataTypes.STRING, allowNull: true },
-    refreshTokenExpiresAt: { type: DataTypes.DATE, allowNull: true }
-  });
+const User = mongoose.models.User || mongoose.model("User", userSchema);
 
 module.exports = { User };

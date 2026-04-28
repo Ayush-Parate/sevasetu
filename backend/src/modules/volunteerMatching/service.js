@@ -1,4 +1,3 @@
-const { Op } = require("sequelize");
 const { Match } = require("./models");
 const { Task } = require("../taskManagement/models");
 const { Need } = require("../needIntelligence/models");
@@ -17,13 +16,25 @@ const MATCH_WEIGHTS = {
 
 const MAX_DISTANCE_KM = 50;
 
+function clamp01(value) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(value, 1));
+}
+
+function toFiniteNumber(value, fallback = 0) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+}
+
 async function createMatch(payload) {
   const ai = await scoreVolunteerMatch(payload.needId, payload.volunteerId);
-  return Match.create({ ...payload, score: ai.score });
+  const score = toFiniteNumber(ai?.score, 0);
+  const match = await Match.create({ ...payload, score });
+  return match.toJSON();
 }
 
 async function listMatches() {
-  return Match.findAll();
+  return Match.find({}).sort({ createdAt: -1 }).lean();
 }
 
 function toLowerSafeArray(values = []) {
@@ -112,30 +123,25 @@ function getUrgencyScore(task, need) {
 }
 
 async function getExperienceScore(volunteerId) {
-  const total = await Task.count({ where: { assignedTo: volunteerId } });
+  const total = await Task.countDocuments({ assignedTo: volunteerId });
   if (!total) {
     return 0.5;
   }
-  const completed = await Task.count({
-    where: { assignedTo: volunteerId, status: { [Op.iLike]: "completed" } }
-  });
+  const completed = await Task.countDocuments({ assignedTo: volunteerId, status: /^completed$/i });
   return completed / total;
 }
 
 async function matchVolunteersForTask(taskId) {
-  const task = await Task.findByPk(taskId);
+  const task = await Task.findById(taskId).lean();
   if (!task) {
     throw { statusCode: 404, message: "Task not found" };
   }
 
-  const need = task.needId ? await Need.findByPk(task.needId) : null;
+  const need = task.needId ? await Need.findById(task.needId).lean() : null;
+  const taskRef = String(task._id);
+  const needRef = task.needId ? String(task.needId) : null;
 
-  const volunteers = await User.findAll({
-    where: {
-      role: ROLES.VOLUNTEER,
-      isActive: true
-    }
-  });
+  const volunteers = await User.find({ role: ROLES.VOLUNTEER, isActive: true }).lean();
 
   if (!volunteers.length) {
     return [];
@@ -161,7 +167,8 @@ async function matchVolunteersForTask(taskId) {
     const skillMatch = getSkillMatchScore(requiredSkills, volunteer.skills || []);
     const availability = getAvailabilityScore(volunteer.availabilityStatus);
     const trust = Math.max(0, Math.min((volunteer.trustScore || 0) / 100, 1));
-    const experience = await getExperienceScore(volunteer.id);
+    const volunteerId = String(volunteer._id || volunteer.id);
+    const experience = await getExperienceScore(volunteerId);
     const language = getLanguageScore(requiredLanguage, volunteer.languages || []);
 
     const baseScore =
@@ -172,10 +179,10 @@ async function matchVolunteersForTask(taskId) {
       experience * MATCH_WEIGHTS.experience +
       urgencyScore * MATCH_WEIGHTS.urgency;
 
-    const languageAdjustedScore = Math.max(0, Math.min(baseScore * (0.9 + 0.1 * language), 1));
-    const finalScore = await refineVolunteerScoreWithML(languageAdjustedScore, {
-      taskId: task.id,
-      volunteerId: volunteer.id,
+    const languageAdjustedScore = clamp01(baseScore * (0.9 + 0.1 * language));
+    const refinedScore = await refineVolunteerScoreWithML(languageAdjustedScore, {
+      taskId: taskRef,
+      volunteerId,
       distanceKm: distance.distanceKm,
       skillMatch,
       availability,
@@ -185,7 +192,8 @@ async function matchVolunteersForTask(taskId) {
       language
     });
 
-    const scorePercent = Number((Math.max(0, Math.min(finalScore, 1)) * 100).toFixed(2));
+    const finalScore = clamp01(toFiniteNumber(refinedScore, languageAdjustedScore));
+    const scorePercent = Number((finalScore * 100).toFixed(2));
     const scoreBreakdown = {
       distanceKm: distance.distanceKm,
       distanceScore: Number((distance.normalized * 100).toFixed(2)),
@@ -199,7 +207,7 @@ async function matchVolunteersForTask(taskId) {
     };
 
     scored.push({
-      volunteerId: volunteer.id,
+      volunteerId,
       volunteerName: volunteer.fullName,
       score: scorePercent,
       breakdown: scoreBreakdown
@@ -212,8 +220,8 @@ async function matchVolunteersForTask(taskId) {
   await Promise.all(
     topFive.map((entry) =>
       Match.create({
-        needId: task.needId || null,
-        taskId: task.id,
+        needId: needRef,
+        taskId: taskRef,
         volunteerId: entry.volunteerId,
         score: entry.score,
         scoreBreakdown: entry.breakdown,

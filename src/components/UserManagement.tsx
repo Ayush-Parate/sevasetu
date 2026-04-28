@@ -15,8 +15,9 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import UserProfileView from "./UserProfileView";
 import { useToast } from "./Toast";
+import AccessRequestManagement from "./AccessRequestManagement";
 
-type UserTab = "all" | "high_impact" | "flagged";
+type UserTab = "all" | "high_impact" | "flagged" | "requests";
 
 const mockUsers = [
   {
@@ -409,6 +410,20 @@ export default function UserManagement() {
             Flagged
             <span className="w-2 h-2 rounded-full bg-rose-500"></span>
           </button>
+          <button
+            onClick={() => setActiveTab("requests")}
+            className={`px-6 py-2.5 text-sm font-semibold rounded-lg transition-all flex items-center gap-2 ${
+              activeTab === "requests"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <CheckCircle2
+              size={16}
+              className={activeTab === "requests" ? "text-brand-green" : ""}
+            />
+            Access Requests
+          </button>
         </div>
       </div>
 
@@ -423,6 +438,7 @@ export default function UserManagement() {
           {activeTab === "all" && renderAllUsers()}
           {activeTab === "high_impact" && renderHighImpact()}
           {activeTab === "flagged" && renderFlagged()}
+          {activeTab === "requests" && <AccessRequestManagement />}
         </motion.div>
       </AnimatePresence>
     </div>

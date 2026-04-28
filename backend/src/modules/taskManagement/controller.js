@@ -11,4 +11,14 @@ const listTasks = asyncHandler(async (_req, res) => {
   res.json({ success: true, data: tasks });
 });
 
-module.exports = { createTask, listTasks };
+const assignTask = asyncHandler(async (req, res) => {
+  const task = await service.assignTask(req.params.id, req.body.volunteerId);
+  res.json({ success: true, data: task });
+});
+
+const updateTaskStatus = asyncHandler(async (req, res) => {
+  const task = await service.updateTaskStatus(req.params.id, req.body.status);
+  res.json({ success: true, data: task });
+});
+
+module.exports = { createTask, listTasks, assignTask, updateTaskStatus };

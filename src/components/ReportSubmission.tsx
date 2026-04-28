@@ -17,6 +17,7 @@ import {
   ArrowRight
 } from "lucide-react";
 import { useToast } from "./Toast";
+import { createNeed, processTextInput, uploadEvidence } from "../lib/api";
 
 type InputType = "TEXT" | "IMAGE" | "SCAN" | "AUDIO" | "PDF" | "CSV" | "FORM";
 
@@ -35,18 +36,56 @@ export default function ReportSubmission() {
   const [selectedType, setSelectedType] = useState<InputType | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [result, setResult] = useState<{ label: string; urgency: number } | null>(null);
+  const [formData, setFormData] = useState({
+    reporterName: "",
+    phone: "",
+    category: "Food Scarcity",
+    description: "",
+    quickText: ""
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
-    // Simulate Processing (Classification & Urgency Engines)
-    setTimeout(() => {
+
+    try {
+      let description = formData.description;
+      let title = formData.category;
+
+      if (selectedType === "TEXT") {
+        const processed = await processTextInput(formData.quickText);
+        description = processed.normalizedText || formData.quickText;
+        title = "Quick Community Report";
+      } else if (selectedType && selectedType !== "FORM") {
+        if (!selectedFile) {
+          throw new Error("Please select a file before submitting.");
+        }
+        const uploaded = await uploadEvidence(selectedFile);
+        description = uploaded.extractedText || `Uploaded ${selectedType} evidence: ${selectedFile.name}`;
+        title = `${selectedType} Intake`;
+      }
+
+      const createdNeed = await createNeed({
+        title,
+        description,
+        location: formData.reporterName ? `${formData.reporterName} submission` : undefined,
+        urgencyScore: 84
+      });
+
+      setResult({
+        label: createdNeed.aiLabel || "UNCLASSIFIED",
+        urgency: Number(createdNeed.urgencyScore || 84)
+      });
       setIsSubmitting(false);
       setIsSuccess(true);
       showToast("Need Intelligence Graph updated. Resource routed.", "success");
-    }, 2000);
+    } catch (err) {
+      setIsSubmitting(false);
+      showToast(err instanceof Error ? err.message : "Unable to submit report", "error");
+    }
   };
 
   if (isSuccess) {
@@ -61,10 +100,10 @@ export default function ReportSubmission() {
         </motion.div>
         <h2 className="text-4xl font-black text-slate-900 tracking-tighter italic uppercase mb-4">Transmission Successful</h2>
         <p className="text-slate-500 font-medium italic max-w-sm mb-10 leading-relaxed font-serif">
-          Our classification engine has categorized this as <span className="text-brand-green font-bold">DRINKING WATER SCARCITY</span> with an urgency score of <span className="text-brand-green font-bold">8.4/10</span>.
+          Our classification engine has categorized this as <span className="text-brand-green font-bold">{result?.label || "UNCLASSIFIED"}</span> with an urgency score of <span className="text-brand-green font-bold">{((result?.urgency || 84) / 10).toFixed(1)}/10</span>.
         </p>
         <button 
-          onClick={() => { setIsSuccess(false); setSelectedType(null); }}
+          onClick={() => { setIsSuccess(false); setSelectedType(null); setSelectedFile(null); setResult(null); }}
           className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:bg-brand-green transition-all"
         >
           Submit Another Report
@@ -137,15 +176,15 @@ export default function ReportSubmission() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                      <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-4">Full Name / Reporter</label>
-                        <input required type="text" className="w-full px-8 py-5 bg-slate-50 border border-slate-100 rounded-[1.5rem] text-sm font-medium italic focus:ring-2 focus:ring-brand-green/20" placeholder="e.g. S. Kumar" />
+                        <input required type="text" value={formData.reporterName} onChange={(e) => setFormData((prev) => ({ ...prev, reporterName: e.target.value }))} className="w-full px-8 py-5 bg-slate-50 border border-slate-100 rounded-[1.5rem] text-sm font-medium italic focus:ring-2 focus:ring-brand-green/20" placeholder="e.g. S. Kumar" />
                      </div>
                      <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-4">Phone Number</label>
-                        <input required type="tel" className="w-full px-8 py-5 bg-slate-50 border border-slate-100 rounded-[1.5rem] text-sm font-medium italic focus:ring-2 focus:ring-brand-green/20" placeholder="+91 0000 0000" />
+                        <input required type="tel" value={formData.phone} onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))} className="w-full px-8 py-5 bg-slate-50 border border-slate-100 rounded-[1.5rem] text-sm font-medium italic focus:ring-2 focus:ring-brand-green/20" placeholder="+91 0000 0000" />
                      </div>
                      <div className="space-y-2 md:col-span-2">
                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-4">Need Category</label>
-                        <select className="w-full px-8 py-5 bg-slate-50 border border-slate-100 rounded-[1.5rem] text-sm font-medium italic focus:ring-2 focus:ring-brand-green/20 appearance-none">
+                        <select value={formData.category} onChange={(e) => setFormData((prev) => ({ ...prev, category: e.target.value }))} className="w-full px-8 py-5 bg-slate-50 border border-slate-100 rounded-[1.5rem] text-sm font-medium italic focus:ring-2 focus:ring-brand-green/20 appearance-none">
                            <option>Food Scarcity</option>
                            <option>Water Connection Issue</option>
                            <option>Emergency Health Event</option>
@@ -156,18 +195,30 @@ export default function ReportSubmission() {
                      </div>
                      <div className="space-y-2 md:col-span-2">
                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-4">Description of Incident</label>
-                        <textarea required className="w-full px-8 py-5 bg-slate-50 border border-slate-100 rounded-[2rem] text-sm font-medium italic focus:ring-2 focus:ring-brand-green/20 min-h-[150px]" placeholder="Provide details about the issue..."></textarea>
+                        <textarea required value={formData.description} onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))} className="w-full px-8 py-5 bg-slate-50 border border-slate-100 rounded-[2rem] text-sm font-medium italic focus:ring-2 focus:ring-brand-green/20 min-h-[150px]" placeholder="Provide details about the issue..."></textarea>
                      </div>
+                  </div>
+                ) : selectedType === "TEXT" ? (
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-4">Quick Field Report</label>
+                    <textarea
+                      required
+                      value={formData.quickText}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, quickText: e.target.value }))}
+                      className="w-full px-8 py-5 bg-slate-50 border border-slate-100 rounded-[2rem] text-sm font-medium italic focus:ring-2 focus:ring-brand-green/20 min-h-[180px]"
+                      placeholder="Type the signal, report, or community issue here..."
+                    ></textarea>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center p-16 bg-slate-50 border-2 border-dashed border-slate-200 rounded-[3rem] text-center space-y-6 hover:border-brand-green hover:bg-brand-green/5 transition-all cursor-pointer group" onClick={() => fileInputRef.current?.click()}>
-                     <input type="file" ref={fileInputRef} className="hidden" />
+                     <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => setSelectedFile(e.target.files?.[0] || null)} />
                      <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center text-slate-400 group-hover:text-brand-green shadow-sm group-hover:scale-110 transition-transform">
                         {selectedType === "AUDIO" ? <Mic size={32} /> : <Upload size={32} />}
                      </div>
                      <div className="space-y-2">
                         <p className="text-lg font-bold text-slate-900 tracking-tight italic">Drag & Drop {selectedType} File</p>
                         <p className="text-xs text-slate-400 font-medium italic font-serif">Maximum file size: 25MB • Secure PII encryption active</p>
+                        {selectedFile ? <p className="text-sm font-semibold text-brand-green">{selectedFile.name}</p> : null}
                      </div>
                   </div>
                 )}

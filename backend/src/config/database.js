@@ -1,24 +1,24 @@
-const { Sequelize } = require("sequelize");
+const mongoose = require("mongoose");
 
-const dialect = (process.env.DB_DIALECT || "postgres").toLowerCase();
+const MONGODB_URI =
+  process.env.MONGODB_URI ||
+  "mongodb+srv://ayushparate1712:%40Ayush1712@ayushapi.phtqlsw.mongodb.net/sevasetu?retryWrites=true&w=majority&appName=AyushApi";
 
-const sequelize =
-  dialect === "sqlite"
-    ? new Sequelize({
-        dialect: "sqlite",
-        storage: process.env.DB_STORAGE || "janconnect.sqlite",
-        logging: false
-      })
-    : new Sequelize(
-        process.env.DB_NAME || "janconnect",
-        process.env.DB_USER || "postgres",
-        process.env.DB_PASSWORD || "postgres",
-        {
-          host: process.env.DB_HOST || "localhost",
-          port: process.env.DB_PORT || 5432,
-          dialect: "postgres",
-          logging: false
-        }
-      );
+async function connectToDatabase() {
+  if (mongoose.connection.readyState === 1) {
+    return mongoose.connection;
+  }
 
-module.exports = { sequelize };
+  await mongoose.connect(MONGODB_URI, {
+    serverSelectionTimeoutMS: 15000
+  });
+  return mongoose.connection;
+}
+
+async function disconnectFromDatabase() {
+  if (mongoose.connection.readyState !== 0) {
+    await mongoose.disconnect();
+  }
+}
+
+module.exports = { mongoose, connectToDatabase, disconnectFromDatabase, MONGODB_URI };

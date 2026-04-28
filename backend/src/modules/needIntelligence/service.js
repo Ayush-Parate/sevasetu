@@ -3,15 +3,16 @@ const { classifyNeed } = require("../../utils/aiHooks");
 
 async function createNeed(payload) {
   const classification = await classifyNeed(payload);
-  return Need.create({
+  const need = await Need.create({
     ...payload,
     aiLabel: classification.label,
     priorityScore: classification.confidence
   });
+  return need.toJSON();
 }
 
 async function listNeeds() {
-  return Need.findAll();
+  return Need.find({}).sort({ createdAt: -1 }).lean();
 }
 
 module.exports = { createNeed, listNeeds };

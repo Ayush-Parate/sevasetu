@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ClipboardList,
   Plus,
@@ -26,12 +26,58 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useToast } from "../Toast";
+import { assignTask, createTask, listTasks, listUsers, matchVolunteers, updateTaskStatus } from "../../lib/api";
 
 type SubView = "tracker" | "create" | "assign";
 
 export default function TaskAssignmentCenter() {
   const [activeView, setActiveView] = useState<SubView>("tracker");
   const { showToast } = useToast();
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [volunteers, setVolunteers] = useState<any[]>([]);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [rankedVolunteers, setRankedVolunteers] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [taskForm, setTaskForm] = useState({
+    title: "",
+    category: "Relief Supplies",
+    urgency: 60,
+    location: "",
+    dueDate: "",
+    requiredSkills: "First Aid, Heavy Lifting",
+    volunteerRequirement: 2,
+    requiredLanguage: "",
+    proofPhoto: true,
+    proofGps: true,
+    proofSignature: false,
+    description: ""
+  });
+
+  const selectedTask = useMemo(
+    () => tasks.find((task) => task.id === selectedTaskId) || tasks[0] || null,
+    [selectedTaskId, tasks]
+  );
+
+  useEffect(() => {
+    void refreshData();
+  }, []);
+
+  async function refreshData() {
+    setIsLoading(true);
+    try {
+      const [taskData, userData] = await Promise.all([listTasks(), listUsers()]);
+      setTasks(taskData);
+      setVolunteers(userData.filter((user) => user.role === "Volunteer"));
+      if (!selectedTaskId && taskData[0]?.id) {
+        setSelectedTaskId(taskData[0].id);
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to load task center data", "error");
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   const handleAction = (action: string, details?: string) => {
     showToast(`${action} ${details ? `- ${details}` : ""} processed successfully.`, "success");
@@ -39,6 +85,78 @@ export default function TaskAssignmentCenter() {
       setActiveView("tracker");
     }
   };
+
+  function parseSkills(value: string) {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  async function handleCreateTask() {
+    setIsSubmitting(true);
+    try {
+      await createTask({
+        title: taskForm.title,
+        description: taskForm.description || `${taskForm.category} deployment at ${taskForm.location}`,
+        requiredSkills: parseSkills(taskForm.requiredSkills),
+        requiredLanguage: taskForm.requiredLanguage || undefined,
+        urgencyOverride: taskForm.urgency,
+        dueDate: taskForm.dueDate || undefined,
+        volunteerRequirement: taskForm.volunteerRequirement,
+        proofRequired: [
+          taskForm.proofPhoto ? "PHOTO" : null,
+          taskForm.proofGps ? "GPS" : null,
+          taskForm.proofSignature ? "SIGNATURE" : null
+        ].filter(Boolean) as string[]
+      });
+      await refreshData();
+      showToast("New task created in backend.", "success");
+      setActiveView("tracker");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Unable to create task", "error");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleRunMatching() {
+    if (!selectedTask) {
+      showToast("No task selected for matching.", "warning");
+      return;
+    }
+
+    try {
+      const response = await matchVolunteers(selectedTask.id);
+      setRankedVolunteers(response.data);
+      showToast(`Ranked ${response.totalRanked} volunteers for the selected task.`, "success");
+      setActiveView("assign");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Unable to rank volunteers", "error");
+    }
+  }
+
+  async function handleAssignVolunteer(volunteerId: string, volunteerName: string) {
+    if (!selectedTask) return;
+    try {
+      await assignTask(selectedTask.id, volunteerId);
+      await refreshData();
+      showToast(`Assigned ${volunteerName} to task ${selectedTask.title}.`, "success");
+      setActiveView("tracker");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Unable to assign volunteer", "error");
+    }
+  }
+
+  async function handleStatusUpdate(taskId: string, status: string, message: string) {
+    try {
+      await updateTaskStatus(taskId, status);
+      await refreshData();
+      showToast(message, "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Unable to update task status", "error");
+    }
+  }
 
   const renderCreate = () => (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -55,6 +173,8 @@ export default function TaskAssignmentCenter() {
               <input
                 type="text"
                 placeholder="e.g. Deliver 50 Blankets to Sector 4"
+                value={taskForm.title}
+                onChange={(e) => setTaskForm((prev) => ({ ...prev, title: e.target.value }))}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-green/20 outline-none"
               />
             </div>
@@ -63,7 +183,7 @@ export default function TaskAssignmentCenter() {
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-2">
                   Need Category
                 </label>
-                <select className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-green/20 outline-none hover:bg-slate-100 cursor-pointer">
+                <select value={taskForm.category} onChange={(e) => setTaskForm((prev) => ({ ...prev, category: e.target.value }))} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-green/20 outline-none hover:bg-slate-100 cursor-pointer">
                   <option>Relief Supplies</option>
                   <option>Medical Assistance</option>
                   <option>Rescue / Evacuation</option>
@@ -75,10 +195,10 @@ export default function TaskAssignmentCenter() {
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-2">
                   Urgency Level
                 </label>
-                <select className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-green/20 outline-none hover:bg-slate-100 cursor-pointer">
-                  <option>Routine (Within 48h)</option>
-                  <option>High (Within 12h)</option>
-                  <option>Critical (Immediate)</option>
+                <select value={taskForm.urgency} onChange={(e) => setTaskForm((prev) => ({ ...prev, urgency: Number(e.target.value) }))} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-green/20 outline-none hover:bg-slate-100 cursor-pointer">
+                  <option value={40}>Routine (Within 48h)</option>
+                  <option value={75}>High (Within 12h)</option>
+                  <option value={95}>Critical (Immediate)</option>
                 </select>
               </div>
             </div>
@@ -90,6 +210,8 @@ export default function TaskAssignmentCenter() {
                 <input
                   type="text"
                   placeholder="Enter coordinates or address"
+                  value={taskForm.location}
+                  onChange={(e) => setTaskForm((prev) => ({ ...prev, location: e.target.value }))}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-green/20 outline-none"
                 />
               </div>
@@ -99,6 +221,8 @@ export default function TaskAssignmentCenter() {
                 </label>
                 <input
                   type="datetime-local"
+                  value={taskForm.dueDate}
+                  onChange={(e) => setTaskForm((prev) => ({ ...prev, dueDate: e.target.value }))}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-green/20 outline-none text-slate-500 cursor-pointer"
                 />
               </div>
@@ -120,21 +244,16 @@ export default function TaskAssignmentCenter() {
               <input
                 type="text"
                 placeholder="e.g. Medical, Driving, Language..."
+                value={taskForm.requiredSkills}
+                onChange={(e) => setTaskForm((prev) => ({ ...prev, requiredSkills: e.target.value }))}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-green/20 outline-none mb-2"
               />
               <div className="flex flex-wrap gap-2">
-                <span className="px-2 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-bold rounded-lg flex items-center gap-1">
-                  First Aid{" "}
-                  <button className="hover:text-rose-500 transition-colors">
-                    &times;
-                  </button>
-                </span>
-                <span className="px-2 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-bold rounded-lg flex items-center gap-1">
-                  Heavy Lifting{" "}
-                  <button className="hover:text-rose-500 transition-colors">
-                    &times;
-                  </button>
-                </span>
+                {parseSkills(taskForm.requiredSkills).map((skill) => (
+                  <span key={skill} className="px-2 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-bold rounded-lg">
+                    {skill}
+                  </span>
+                ))}
               </div>
             </div>
             <div>
@@ -145,8 +264,32 @@ export default function TaskAssignmentCenter() {
                 type="number"
                 min="1"
                 placeholder="Number of volunteers"
-                defaultValue="2"
+                value={taskForm.volunteerRequirement}
+                onChange={(e) => setTaskForm((prev) => ({ ...prev, volunteerRequirement: Number(e.target.value) }))}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-green/20 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">
+                Required Language
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Hindi"
+                value={taskForm.requiredLanguage}
+                onChange={(e) => setTaskForm((prev) => ({ ...prev, requiredLanguage: e.target.value }))}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-green/20 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">
+                Task Description
+              </label>
+              <textarea
+                value={taskForm.description}
+                onChange={(e) => setTaskForm((prev) => ({ ...prev, description: e.target.value }))}
+                className="w-full min-h-[120px] bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-green/20 outline-none"
+                placeholder="Operational notes, delivery details, or deployment context"
               />
             </div>
             <div>
@@ -158,7 +301,8 @@ export default function TaskAssignmentCenter() {
                   <input
                     type="checkbox"
                     className="accent-brand-green w-4 h-4 cursor-pointer"
-                    defaultChecked
+                    checked={taskForm.proofPhoto}
+                    onChange={(e) => setTaskForm((prev) => ({ ...prev, proofPhoto: e.target.checked }))}
                   />
                   <Camera size={16} className="text-slate-400" /> Photo
                   Verification
@@ -167,7 +311,8 @@ export default function TaskAssignmentCenter() {
                   <input
                     type="checkbox"
                     className="accent-brand-green w-4 h-4 cursor-pointer"
-                    defaultChecked
+                    checked={taskForm.proofGps}
+                    onChange={(e) => setTaskForm((prev) => ({ ...prev, proofGps: e.target.checked }))}
                   />
                   <MapPin size={16} className="text-slate-400" /> GPS Location
                   Ping
@@ -176,6 +321,8 @@ export default function TaskAssignmentCenter() {
                   <input
                     type="checkbox"
                     className="accent-brand-green w-4 h-4 cursor-pointer"
+                    checked={taskForm.proofSignature}
+                    onChange={(e) => setTaskForm((prev) => ({ ...prev, proofSignature: e.target.checked }))}
                   />
                   <FileSignature size={16} className="text-slate-400" />{" "}
                   Recipient Signature
@@ -187,19 +334,20 @@ export default function TaskAssignmentCenter() {
 
           <div className="flex flex-col gap-3">
             <button
-              onClick={() => handleAction("AI Matching Optimized")}
+              onClick={handleRunMatching}
               className="w-full py-3.5 bg-gradient-to-r from-brand-green to-emerald-500 text-white text-sm font-bold rounded-xl shadow-lg shadow-brand-green/20 hover:shadow-xl hover:from-emerald-500 hover:to-brand-green transition-all flex items-center justify-center gap-2"
             >
               <Wand2 size={18} /> Auto Match Volunteers
             </button>
             <button
-              onClick={() => handleAction("New Task Created")}
+              onClick={handleCreateTask}
+              disabled={isSubmitting || !taskForm.title.trim()}
               className="w-full py-3.5 bg-slate-900 text-white text-sm font-bold rounded-xl hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
             >
-              <Plus size={18} /> Create Task
+              <Plus size={18} /> {isSubmitting ? "Creating..." : "Create Task"}
             </button>
             <button
-              onClick={() => handleAction("Task Draft Saved")}
+              onClick={() => showToast("Draft preserved locally in the form.", "info")}
               className="w-full py-3.5 bg-white text-slate-700 border border-slate-200 text-sm font-bold rounded-xl hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
             >
               <Save size={18} /> Save Draft
@@ -221,56 +369,32 @@ export default function TaskAssignmentCenter() {
             12 Tasks awaiting deployment
           </p>
         </div>
-        {[
-          {
-            id: "T-1029",
-            title: "Deliver Blankets",
-            loc: "Sector 4",
-            urgent: true,
-          },
-          {
-            id: "T-1030",
-            title: "Medical Drop-off",
-            loc: "Camp Alpha",
-            urgent: true,
-          },
-          {
-            id: "T-1031",
-            title: "Site Assessment",
-            loc: "North Dist",
-            urgent: false,
-          },
-          {
-            id: "T-1032",
-            title: "Water Supply Load",
-            loc: "Sector B",
-            urgent: false,
-          },
-        ].map((task, i) => (
+        {(tasks.length ? tasks : []).map((task, i) => (
           <div
-            key={i}
-            className={`p-4 rounded-2xl border ${i === 0 ? "border-indigo-500 bg-indigo-50/50 shadow-md shadow-indigo-500/10" : "border-slate-100 bg-white hover:border-slate-300"} cursor-pointer transition-colors relative overflow-hidden group`}
+            key={task.id}
+            onClick={() => setSelectedTaskId(task.id)}
+            className={`p-4 rounded-2xl border ${selectedTask?.id === task.id ? "border-indigo-500 bg-indigo-50/50 shadow-md shadow-indigo-500/10" : "border-slate-100 bg-white hover:border-slate-300"} cursor-pointer transition-colors relative overflow-hidden group`}
           >
-            {i === 0 && (
+            {selectedTask?.id === task.id && (
               <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500"></div>
             )}
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] font-bold text-slate-400">
-                {task.id}
+                {task.id.slice(0, 8)}
               </span>
-              {task.urgent && (
+              {(task.urgencyOverride || 0) >= 75 && (
                 <span className="px-2 py-0.5 bg-rose-100 text-rose-700 text-[10px] font-bold rounded uppercase">
                   Urgent
                 </span>
               )}
             </div>
             <h4
-              className={`font-bold ${i === 0 ? "text-indigo-900" : "text-slate-800"} text-sm mb-1 group-hover:text-indigo-600 transition-colors`}
+              className={`font-bold ${selectedTask?.id === task.id ? "text-indigo-900" : "text-slate-800"} text-sm mb-1 group-hover:text-indigo-600 transition-colors`}
             >
               {task.title}
             </h4>
             <div className="text-xs text-slate-500 flex items-center gap-1 font-semibold">
-              <MapPin size={10} /> {task.loc}
+              <MapPin size={10} /> {task.location || "Location pending"}
             </div>
           </div>
         ))}
@@ -283,7 +407,7 @@ export default function TaskAssignmentCenter() {
             <div className="flex items-center gap-2 mb-2">
               <Brain className="text-brand-green" size={20} />
               <h3 className="font-bold text-slate-100 text-lg">
-                Smart Assignment Engine for T-1029
+                Smart Assignment Engine for {selectedTask ? selectedTask.title : "No Task Selected"}
               </h3>
             </div>
             <p className="text-sm text-slate-400">
@@ -297,53 +421,38 @@ export default function TaskAssignmentCenter() {
         </div>
 
         <div className="space-y-4">
-          {[
-            {
-              name: "Vikram Singh",
-              dist: "1.2 km away",
-              match: 98,
-              trust: 4.9,
-              lang: "Match",
-              status: "Available Now",
+          {(rankedVolunteers.length ? rankedVolunteers : volunteers.slice(0, 5).map((volunteer) => ({
+            volunteerId: volunteer.id,
+            volunteerName: volunteer.fullName,
+            score: Math.round(volunteer.trustScore || 0),
+            breakdown: {
+              distanceKm: null,
+              trustScore: volunteer.trustScore || 0,
+              languageCompatibility: volunteer.languages?.length ? 100 : 0
             },
-            {
-              name: "Priya Patel",
-              dist: "3.5 km away",
-              match: 85,
-              trust: 4.8,
-              lang: "Match",
-              status: "Finishing Task",
-            },
-            {
-              name: "Arjun Reddy",
-              dist: "0.8 km away",
-              match: 72,
-              trust: 4.2,
-              lang: "Partial",
-              status: "Available Now",
-            },
-          ].map((vol, j) => (
+            availabilityStatus: volunteer.availabilityStatus
+          }))).map((vol, j) => (
             <div
-              key={j}
+              key={vol.volunteerId}
               className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4 group hover:border-slate-300 transition-all hover:shadow-md"
             >
               <div className="flex items-center gap-4 w-full md:w-auto">
                 <div
                   className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-lg border ${j === 0 ? "bg-brand-green text-white border-brand-green shadow-lg shadow-brand-green/20" : "bg-slate-50 text-slate-600 border-slate-200"}`}
                 >
-                  {vol.name.charAt(0)}
+                  {vol.volunteerName.charAt(0)}
                 </div>
                 <div>
                   <h4 className="font-bold text-slate-900 text-lg leading-tight">
-                    {vol.name}
+                    {vol.volunteerName}
                   </h4>
                   <div className="text-[10px] uppercase font-bold tracking-widest flex items-center gap-2 mt-1.5">
                     <span className="text-emerald-600 flex items-center gap-1">
-                      <Activity size={10} /> {vol.status}
+                      <Activity size={10} /> {vol.availabilityStatus || "Available"}
                     </span>
                     <span className="text-slate-300">•</span>
                     <span className="text-slate-500 flex items-center gap-1">
-                      <MapPin size={10} /> {vol.dist}
+                      <MapPin size={10} /> {vol.breakdown?.distanceKm ? `${vol.breakdown.distanceKm.toFixed(1)} km away` : "Distance unavailable"}
                     </span>
                   </div>
                 </div>
@@ -355,9 +464,9 @@ export default function TaskAssignmentCenter() {
                     Match
                   </div>
                   <div
-                    className={`text-xl font-black ${vol.match > 90 ? "text-brand-green" : vol.match > 80 ? "text-indigo-600" : "text-amber-500"}`}
+                    className={`text-xl font-black ${vol.score > 90 ? "text-brand-green" : vol.score > 80 ? "text-indigo-600" : "text-amber-500"}`}
                   >
-                    {vol.match}%
+                    {vol.score}%
                   </div>
                 </div>
                 <div>
@@ -366,7 +475,7 @@ export default function TaskAssignmentCenter() {
                   </div>
                   <div className="text-sm font-bold text-slate-700 mt-1.5 flex items-center gap-1">
                     <Star size={14} className="text-amber-400 fill-amber-400" />{" "}
-                    {vol.trust}
+                    {((vol.breakdown?.trustScore || 0) / 20).toFixed(1)}
                   </div>
                 </div>
                 <div>
@@ -374,20 +483,20 @@ export default function TaskAssignmentCenter() {
                     Lang
                   </div>
                   <div className="text-sm font-bold text-slate-700 mt-1.5">
-                    {vol.lang}
+                    {(vol.breakdown?.languageCompatibility || 0) >= 100 ? "Match" : "Partial"}
                   </div>
                 </div>
               </div>
 
               <div className="flex flex-col gap-2 w-full md:w-40 shrink-0 mt-4 md:mt-0">
                 <button
-                  onClick={() => handleAction("One-Click Assign", vol.name)}
+                  onClick={() => handleAssignVolunteer(vol.volunteerId, vol.volunteerName)}
                   className="w-full py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors shadow-lg shadow-slate-900/10"
                 >
                   One-Click Assign
                 </button>
                 <button
-                  onClick={() => handleAction("Force Assign Overridden", vol.name)}
+                  onClick={() => handleAssignVolunteer(vol.volunteerId, vol.volunteerName)}
                   className="w-full py-2 bg-slate-50 text-slate-600 border border-slate-200 rounded-xl text-xs font-bold hover:bg-slate-100 transition-colors"
                 >
                   Force Assign
@@ -416,58 +525,21 @@ export default function TaskAssignmentCenter() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {[
-                {
-                  id: "T-1025",
-                  title: "Medical Camp Setup",
-                  vol: "Sneha Reddy",
-                  statusPath: ["assigned", "accepted", "on_way", "in_progress"],
-                  currentStatus: "in_progress",
-                  stall: false,
-                },
-                {
-                  id: "T-1026",
-                  title: "Food Distribution",
-                  vol: "Priya Patel",
-                  statusPath: ["assigned", "accepted"],
-                  currentStatus: "accepted",
-                  stall: true,
-                },
-                {
-                  id: "T-1027",
-                  title: "Water Supply Drop",
-                  vol: "Amit Kumar",
-                  statusPath: [
-                    "assigned",
-                    "accepted",
-                    "on_way",
-                    "in_progress",
-                    "completed",
-                    "verified",
-                  ],
-                  currentStatus: "verified",
-                  stall: false,
-                },
-                {
-                  id: "T-1028",
-                  title: "Damage Assessment",
-                  vol: "Vikram Singh",
-                  statusPath: ["assigned", "accepted", "on_way"],
-                  currentStatus: "on_way",
-                  stall: false,
-                },
-              ].map((task, i) => {
+              {tasks.map((task, i) => {
                 const allStatuses = [
-                  { key: "assigned", label: "Assigned" },
-                  { key: "accepted", label: "Accepted" },
-                  { key: "on_way", label: "On Way" },
-                  { key: "in_progress", label: "In Progress" },
-                  { key: "completed", label: "Completed" },
-                  { key: "verified", label: "Verified" },
+                  { key: "ASSIGNED", label: "Assigned" },
+                  { key: "ACCEPTED", label: "Accepted" },
+                  { key: "ON_WAY", label: "On Way" },
+                  { key: "IN_PROGRESS", label: "In Progress" },
+                  { key: "COMPLETED", label: "Completed" },
+                  { key: "VERIFIED", label: "Verified" },
                 ];
+                const currentStatus = task.status === "OPEN" ? "ASSIGNED" : task.status;
+                const isBlocked = task.status === "BLOCKED";
 
-                const currentIndex = allStatuses.findIndex(
-                  (s) => s.key === task.currentStatus,
+                const currentIndex = Math.max(
+                  allStatuses.findIndex((s) => s.key === currentStatus),
+                  0
                 );
 
                 return (
@@ -477,7 +549,7 @@ export default function TaskAssignmentCenter() {
                   >
                     <td className="px-6 py-5">
                       <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
-                        {task.id}
+                        {task.id.slice(0, 8)}
                       </div>
                       <div className="font-bold text-slate-900 group-hover:text-brand-green transition-colors">
                         {task.title}
@@ -486,10 +558,10 @@ export default function TaskAssignmentCenter() {
                     <td className="px-6 py-5">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center text-xs font-bold shadow-sm">
-                          {task.vol.charAt(0)}
+                          {(task.assignee?.fullName || "U").charAt(0)}
                         </div>
                         <span className="text-sm font-bold text-slate-700">
-                          {task.vol}
+                          {task.assignee?.fullName || "Unassigned"}
                         </span>
                       </div>
                     </td>
@@ -498,7 +570,7 @@ export default function TaskAssignmentCenter() {
                         {/* Track Line */}
                         <div className="absolute top-[5px] left-0 w-full h-1 bg-slate-100 -translate-y-1/2 rounded-full z-0"></div>
                         <div
-                          className={`absolute top-[5px] left-0 h-1 -translate-y-1/2 rounded-full z-0 transition-all duration-1000 ${task.stall ? "bg-rose-500" : "bg-brand-green"}`}
+                          className={`absolute top-[5px] left-0 h-1 -translate-y-1/2 rounded-full z-0 transition-all duration-1000 ${isBlocked ? "bg-rose-500" : "bg-brand-green"}`}
                           style={{ width: `${(currentIndex / 5) * 100}%` }}
                         ></div>
 
@@ -515,13 +587,13 @@ export default function TaskAssignmentCenter() {
                                 <div
                                   className={`w-3.5 h-3.5 rounded-full border-2 transition-all duration-500 ${
                                     isComplete
-                                      ? task.stall && isCurrent
+                                      ? isBlocked && isCurrent
                                         ? "bg-rose-500 border-rose-500 animate-pulse ring-4 ring-rose-500/20"
                                         : "bg-brand-green border-brand-green shadow-md shadow-brand-green/40"
                                       : "bg-white border-slate-300"
                                   }`}
                                 >
-                                  {isComplete && !isCurrent && !task.stall && (
+                                  {isComplete && !isCurrent && !isBlocked && (
                                     <div className="w-[3px] h-[3px] bg-white rounded-full mx-auto mt-[2px]"></div>
                                   )}
                                 </div>
@@ -535,7 +607,7 @@ export default function TaskAssignmentCenter() {
                         </div>
                       </div>
                       <div className="mt-3 flex justify-between max-w-md mx-auto items-center">
-                        {task.stall ? (
+                        {isBlocked ? (
                           <span className="text-[10px] font-bold uppercase tracking-widest text-rose-500 flex items-center gap-1 bg-rose-50 px-2 py-0.5 rounded-md">
                             <AlertTriangle size={10} /> Blocked at{" "}
                             {allStatuses[currentIndex].label}
@@ -546,7 +618,7 @@ export default function TaskAssignmentCenter() {
                           </span>
                         )}
                         <span
-                          className={`text-[10px] font-bold uppercase tracking-widest ${task.currentStatus === "verified" ? "text-brand-green" : "text-slate-600"}`}
+                          className={`text-[10px] font-bold uppercase tracking-widest ${currentStatus === "VERIFIED" ? "text-brand-green" : "text-slate-600"}`}
                         >
                           {allStatuses[currentIndex].label}
                         </span>
@@ -555,21 +627,24 @@ export default function TaskAssignmentCenter() {
                     <td className="px-6 py-5 text-right">
                       <div className="flex flex-col lg:flex-row items-center justify-end gap-2">
                         <button
-                          onClick={() => handleAction("Live Tracking Ping Sent", task.id)}
+                          onClick={() => handleStatusUpdate(task.id, "ON_WAY", `Live tracking ping recorded for ${task.title}.`)}
                           className="px-3 py-1.5 bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100 text-[10px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 w-full lg:w-auto"
                         >
                           <Navigation2 size={12} /> Track
                         </button>
-                        {task.stall && (
+                        {isBlocked && (
                           <>
                             <button
-                              onClick={() => handleAction("Reassignment Engine Triggered", task.id)}
+                              onClick={() => {
+                                setSelectedTaskId(task.id);
+                                void handleRunMatching();
+                              }}
                               className="px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 text-[10px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 w-full lg:w-auto shadow-sm shadow-amber-700/10"
                             >
                               <Repeat size={12} /> Reassign
                             </button>
                             <button
-                              onClick={() => handleAction("Priority Escalation Processed", task.id)}
+                              onClick={() => handleStatusUpdate(task.id, "BLOCKED", `Priority escalation processed for ${task.title}.`)}
                               className="px-3 py-1.5 bg-rose-500 text-white rounded-lg text-[10px] font-bold hover:bg-rose-600 transition-colors flex items-center justify-center gap-1.5 w-full lg:w-auto shadow-sm shadow-rose-500/20"
                             >
                               <ShieldAlert size={12} /> Escalate

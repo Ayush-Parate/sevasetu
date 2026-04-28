@@ -7,8 +7,23 @@ import { motion } from "motion/react";
 import { Search, Gift, User, Play, HandHeart, CheckCircle2, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import LoginPage, { Role } from "./components/LoginPage";
+import SuperAdminDashboard from "./components/SuperAdminDashboard";
+import NGOAdminDashboard from "./components/NGOAdminDashboard";
+import FieldCoordinatorDashboard from "./components/FieldCoordinatorDashboard";
+import VolunteerDashboard from "./components/VolunteerDashboard";
+import VerifierDashboard from "./components/VerifierDashboard";
+import DonorDashboard from "./components/DonorDashboard";
+import PublicRequestModal from "./components/PublicRequestModal";
+import { useToast } from "./components/Toast";
+import { logout, type AuthUser } from "./lib/api";
 
-const Navbar = ({ onLoginClick }: { onLoginClick: () => void }) => {
+const Navbar = ({
+  onLoginClick,
+  onOpenRequest
+}: {
+  onLoginClick: () => void;
+  onOpenRequest: (type: "NGO_REGISTRATION" | "VOLUNTEER_INTEREST") => void;
+}) => {
   const allLinks = [
     { name: "HOME", hasDropdown: false },
     { name: "PLATFORM", hasDropdown: true },
@@ -53,10 +68,16 @@ const Navbar = ({ onLoginClick }: { onLoginClick: () => void }) => {
           >
             LOGIN PORTAL
           </button>
-          <button className="hidden sm:block px-3 py-1.5 text-[9px] 2xl:text-[10px] font-bold tracking-widest text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors uppercase">
+          <button
+            onClick={() => onOpenRequest("NGO_REGISTRATION")}
+            className="hidden sm:block px-3 py-1.5 text-[9px] 2xl:text-[10px] font-bold tracking-widest text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors uppercase"
+          >
             NGO REGISTRATION
           </button>
-          <button className="bg-brand-green text-white px-4 py-2 rounded-lg text-[9px] 2xl:text-[10px] font-bold tracking-widest hover:brightness-110 transition-all shadow-sm uppercase">
+          <button
+            onClick={() => onOpenRequest("VOLUNTEER_INTEREST")}
+            className="bg-brand-green text-white px-4 py-2 rounded-lg text-[9px] 2xl:text-[10px] font-bold tracking-widest hover:brightness-110 transition-all shadow-sm uppercase"
+          >
             JOIN AS VOLUNTEER
           </button>
           <div className="w-px h-6 bg-slate-100 mx-1 hidden sm:block"></div>
@@ -69,7 +90,7 @@ const Navbar = ({ onLoginClick }: { onLoginClick: () => void }) => {
   );
 };
 
-const Hero = () => {
+const Hero = ({ onOpenRequest }: { onOpenRequest: (type: "DONOR_INTEREST" | "DEMO_REQUEST") => void }) => {
   return (
     <section className="relative pt-12 pb-24 overflow-hidden">
       {/* Background Gradient Accent */}
@@ -100,7 +121,10 @@ const Hero = () => {
           transition={{ duration: 0.5, delay: 0.4 }}
           className="flex items-center justify-center gap-8"
         >
-          <button className="bg-brand-green text-white px-8 py-3.5 rounded-xl font-medium shadow-lg hover:shadow-brand-green/20 hover:-translate-y-0.5 transition-all">
+          <button
+            onClick={() => onOpenRequest("DONOR_INTEREST")}
+            className="bg-brand-green text-white px-8 py-3.5 rounded-xl font-medium shadow-lg hover:shadow-brand-green/20 hover:-translate-y-0.5 transition-all"
+          >
             Donate Now
           </button>
 
@@ -300,54 +324,74 @@ const IntelligenceGraph = () => {
 };
 
 export default function App() {
+  const { showToast } = useToast();
   const [view, setView] = useState<"landing" | "login" | "superadmin" | "ngoadmin" | "field_coordinator" | "volunteer" | "verifier" | "donor">("landing");
+  const [preferredRole, setPreferredRole] = useState<Role | null>(null);
+  const [publicRequestType, setPublicRequestType] = useState<
+    "DEMO_REQUEST" | "NGO_REGISTRATION" | "VOLUNTEER_INTEREST" | "DONOR_INTEREST" | "ACCOUNT_REQUEST" | null
+  >(null);
+
+  const handleLogout = async () => {
+    await logout();
+    setView("landing");
+  };
+
+  const handleAuthenticated = (user: AuthUser) => {
+    if (user.role === "Super Admin") setView("superadmin");
+    else if (user.role === "NGO Admin") setView("ngoadmin");
+    else if (user.role === "Field Coordinator") setView("field_coordinator");
+    else if (user.role === "Volunteer") setView("volunteer");
+    else if (user.role === "Verifier") setView("verifier");
+    else if (user.role === "Donor") setView("donor");
+    else {
+      alert(`Dashboard for ${user.role} is not yet implemented.`);
+      setView("landing");
+    }
+  };
 
   if (view === "login") {
     return <LoginPage 
       onBack={() => setView("landing")} 
-      onLoginSuccess={(role: Role) => {
-        if (role === "SUPER_ADMIN") setView("superadmin");
-        else if (role === "NGO_ADMIN") setView("ngoadmin");
-        else if (role === "FIELD_COORDINATOR") setView("field_coordinator");
-        else if (role === "VOLUNTEER") setView("volunteer");
-        else if (role === "VERIFIER") setView("verifier");
-        else if (role === "DONOR") setView("donor");
-        else {
-          alert(`Dashboard for ${role} is not yet implemented.`);
-          setView("landing");
-        }
-      }} 
+      initialRole={preferredRole}
+      onLoginSuccess={handleAuthenticated}
+      onRequestAccount={(role) => {
+        setPublicRequestType("ACCOUNT_REQUEST");
+        setPreferredRole(role);
+      }}
     />;
   }
 
   if (view === "superadmin") {
-    return <SuperAdminDashboard onLogout={() => setView("landing")} />;
+    return <SuperAdminDashboard onLogout={handleLogout} />;
   }
 
   if (view === "ngoadmin") {
-    return <NGOAdminDashboard onLogout={() => setView("landing")} />;
+    return <NGOAdminDashboard onLogout={handleLogout} />;
   }
 
   if (view === "field_coordinator") {
-    return <FieldCoordinatorDashboard onLogout={() => setView("landing")} />;
+    return <FieldCoordinatorDashboard onLogout={handleLogout} />;
   }
 
   if (view === "volunteer") {
-    return <VolunteerDashboard onLogout={() => setView("landing")} />;
+    return <VolunteerDashboard onLogout={handleLogout} />;
   }
 
   if (view === "verifier") {
-    return <VerifierDashboard onLogout={() => setView("landing")} />;
+    return <VerifierDashboard onLogout={handleLogout} />;
   }
 
   if (view === "donor") {
-    return <DonorDashboard onLogout={() => setView("landing")} />;
+    return <DonorDashboard onLogout={handleLogout} />;
   }
 
   return (
     <main className="min-h-screen selection:bg-brand-green/20 overflow-x-hidden">
-      <Navbar onLoginClick={() => setView("login")} />
-      <Hero />
+      <Navbar
+        onLoginClick={() => setView("login")}
+        onOpenRequest={(type) => setPublicRequestType(type)}
+      />
+      <Hero onOpenRequest={(type) => setPublicRequestType(type)} />
       <ImageGallery />
       <IntelligenceGraph />
       
@@ -360,21 +404,32 @@ export default function App() {
             Join the 500+ NGOs already using NeedGraph OS to prioritize action and maximize their social footprint.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
-             <button className="bg-brand-green px-10 py-4 rounded-xl font-bold hover:brightness-110 transition-all">Get a Demo</button>
-             <button className="bg-white/10 px-10 py-4 rounded-xl font-bold backdrop-blur-sm hover:bg-white/20 transition-all">Register NGO</button>
+             <button
+               onClick={() => setPublicRequestType("DEMO_REQUEST")}
+               className="bg-brand-green px-10 py-4 rounded-xl font-bold hover:brightness-110 transition-all"
+             >
+               Get a Demo
+             </button>
+             <button
+               onClick={() => setPublicRequestType("NGO_REGISTRATION")}
+               className="bg-white/10 px-10 py-4 rounded-xl font-bold backdrop-blur-sm hover:bg-white/20 transition-all"
+             >
+               Register NGO
+             </button>
           </div>
         </div>
       </section>
       
       {/* Decorative accent */}
       <div className="fixed bottom-0 left-0 w-full h-[15vh] bg-gradient-to-t from-brand-peach/30 to-transparent pointer-events-none -z-10"></div>
+      {publicRequestType ? (
+        <PublicRequestModal
+          requestType={publicRequestType}
+          defaultRoleRequested={preferredRole || undefined}
+          onClose={() => setPublicRequestType(null)}
+          onSuccess={(message) => showToast(message, "success")}
+        />
+      ) : null}
     </main>
   );
 }
-
-import SuperAdminDashboard from "./components/SuperAdminDashboard";
-import NGOAdminDashboard from "./components/NGOAdminDashboard";
-import FieldCoordinatorDashboard from "./components/FieldCoordinatorDashboard";
-import VolunteerDashboard from "./components/VolunteerDashboard";
-import VerifierDashboard from "./components/VerifierDashboard";
-import DonorDashboard from "./components/DonorDashboard";

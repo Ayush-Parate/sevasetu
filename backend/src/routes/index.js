@@ -7,6 +7,7 @@ const taskRoutes = require("../modules/taskManagement/routes");
 const geoRoutes = require("../modules/geoHeatmap/routes");
 const impactRoutes = require("../modules/impactAnalytics/routes");
 const fileRoutes = require("../modules/fileProcessing/routes");
+const publicIntakeRoutes = require("../modules/publicIntake/routes");
 const matchRoutes = require("./match.routes");
 const impactPublicRoutes = require("./impact.routes");
 
@@ -21,6 +22,7 @@ router.use("/geo-heatmap", geoRoutes);
 router.use("/impact-analytics", impactRoutes);
 router.use("/impact", impactPublicRoutes);
 router.use("/files", fileRoutes);
+router.use("/public", publicIntakeRoutes);
 router.use("/match-volunteers", matchRoutes);
 
 module.exports = router;

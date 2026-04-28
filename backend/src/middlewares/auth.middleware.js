@@ -23,7 +23,7 @@ function attachUser() {
     try {
       if (!req.auth?.id) return next({ statusCode: 401, message: "Unauthorized" });
 
-      const user = await User.findByPk(req.auth.id);
+      const user = await User.findById(req.auth.id);
       if (!user) return next({ statusCode: 401, message: "User not found" });
       if (!user.isActive) return next({ statusCode: 403, message: "User is inactive" });
 

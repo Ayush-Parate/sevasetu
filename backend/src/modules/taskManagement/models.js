@@ -1,38 +1,39 @@
-const { DataTypes } = require("sequelize");
-const { sequelize } = require("../../config/database");
+const { mongoose } = require("../../config/database");
 
-const isSqlite = sequelize.getDialect() === "sqlite";
-const stringArrayType = isSqlite ? DataTypes.JSON : DataTypes.ARRAY(DataTypes.STRING);
-
-const Task =
-  sequelize.models.Task ||
-  sequelize.define(
-    "Task",
-    {
-      id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
-      needId: { type: DataTypes.UUID, allowNull: true },
-      title: { type: DataTypes.STRING, allowNull: false },
-      description: { type: DataTypes.TEXT },
-      assignedTo: { type: DataTypes.UUID },
-      requiredSkills: { type: stringArrayType, defaultValue: [] },
-      requiredLanguage: { type: DataTypes.STRING },
-      locationLat: { type: DataTypes.FLOAT },
-      locationLng: { type: DataTypes.FLOAT },
-      urgencyOverride: { type: DataTypes.FLOAT },
-      dueDate: { type: DataTypes.DATE },
-      firstResponseAt: { type: DataTypes.DATE },
-      completedAt: { type: DataTypes.DATE },
-      status: { type: DataTypes.STRING, defaultValue: "OPEN" }
-    },
-    {
-      indexes: [
-        { fields: ["status"] },
-        { fields: ["assignedTo"] },
-        { fields: ["needId"] },
-        { fields: ["createdAt"] },
-        { fields: ["completedAt"] }
-      ]
+const taskSchema = new mongoose.Schema(
+  {
+    needId: { type: mongoose.Schema.Types.ObjectId, ref: "Need", default: null, index: true },
+    title: { type: String, required: true, trim: true },
+    description: { type: String, default: null },
+    assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true },
+    requiredSkills: { type: [String], default: [] },
+    requiredLanguage: { type: String, default: null },
+    locationLat: { type: Number, default: null },
+    locationLng: { type: Number, default: null },
+    urgencyOverride: { type: Number, default: null },
+    dueDate: { type: Date, default: null },
+    volunteerRequirement: { type: Number, default: 1 },
+    proofRequired: { type: [String], default: [] },
+    firstResponseAt: { type: Date, default: null },
+    completedAt: { type: Date, default: null },
+    status: { type: String, default: "OPEN", index: true }
+  },
+  {
+    timestamps: true,
+    toJSON: {
+      virtuals: true,
+      versionKey: false,
+      transform: (_doc, ret) => {
+        ret.id = ret._id.toString();
+        delete ret._id;
+        return ret;
+      }
     }
-  );
+  }
+);
+
+taskSchema.index({ completedAt: 1 });
+
+const Task = mongoose.models.Task || mongoose.model("Task", taskSchema);
 
 module.exports = { Task };

@@ -1,7 +1,7 @@
 require("dotenv").config();
 
 const bcrypt = require("bcryptjs");
-const { sequelize } = require("./config/database");
+const { connectToDatabase, disconnectFromDatabase } = require("./config/database");
 const logger = require("./config/logger");
 const { initModels } = require("./config/initModels");
 const { ROLES } = require("./constants/roles");
@@ -11,11 +11,21 @@ function randBetween(min, max) {
 }
 
 async function seed() {
-  await sequelize.authenticate();
+  await connectToDatabase();
   const models = initModels();
-
   const force = String(process.env.SEED_FORCE || "false").toLowerCase() === "true";
-  await sequelize.sync({ force, alter: !force });
+  if (force) {
+    await Promise.all([
+      models.User.deleteMany({}),
+      models.Need.deleteMany({}),
+      models.Task.deleteMany({}),
+      models.GeoPoint.deleteMany({}),
+      models.Match.deleteMany({}),
+      models.ImpactMetric.deleteMany({}),
+      models.ProcessedFile.deleteMany({}),
+      models.PublicIntake.deleteMany({})
+    ]);
+  }
 
   const passwordHash = await bcrypt.hash(process.env.SEED_DEFAULT_PASSWORD || "Password@123", 10);
 
@@ -239,10 +249,13 @@ async function seed() {
 }
 
 seed()
-  .then(() => process.exit(0))
+  .then(async () => {
+    await disconnectFromDatabase();
+    process.exit(0);
+  })
   .catch((err) => {
     // eslint-disable-next-line no-console
     console.error(err);
-    process.exit(1);
+    disconnectFromDatabase().finally(() => process.exit(1));
   });
 

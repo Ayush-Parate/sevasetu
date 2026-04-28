@@ -1,4 +1,3 @@
-const { Op } = require("sequelize");
 const { GeoPoint } = require("./models");
 const { Need } = require("../needIntelligence/models");
 
@@ -25,24 +24,24 @@ function getClusterPrecision(zoom = 8) {
 
 function buildNeedFilter({ minLat, maxLat, minLng, maxLng, region }) {
   const where = {
-    locationLat: { [Op.ne]: null },
-    locationLng: { [Op.ne]: null }
+    locationLat: { $ne: null },
+    locationLng: { $ne: null }
   };
 
   if (minLat !== null || maxLat !== null) {
-    where.locationLat = {};
-    if (minLat !== null) where.locationLat[Op.gte] = minLat;
-    if (maxLat !== null) where.locationLat[Op.lte] = maxLat;
+    where.locationLat = { ...(where.locationLat || {}) };
+    if (minLat !== null) where.locationLat.$gte = minLat;
+    if (maxLat !== null) where.locationLat.$lte = maxLat;
   }
 
   if (minLng !== null || maxLng !== null) {
-    where.locationLng = {};
-    if (minLng !== null) where.locationLng[Op.gte] = minLng;
-    if (maxLng !== null) where.locationLng[Op.lte] = maxLng;
+    where.locationLng = { ...(where.locationLng || {}) };
+    if (minLng !== null) where.locationLng.$gte = minLng;
+    if (maxLng !== null) where.locationLng.$lte = maxLng;
   }
 
   if (region) {
-    where.location = { [Op.iLike]: `%${region}%` };
+    where.location = { $regex: region, $options: "i" };
   }
 
   return where;
@@ -93,7 +92,8 @@ function clusterNeeds(needs, precision) {
 }
 
 async function addPoint(payload) {
-  return GeoPoint.create(payload);
+  const point = await GeoPoint.create(payload);
+  return point.toJSON();
 }
 
 async function getHeatmapData(filters = {}) {
@@ -105,12 +105,16 @@ async function getHeatmapData(filters = {}) {
   const limit = Math.min(toNumber(filters.limit) || 5000, MAX_QUERY_ROWS);
 
   const where = buildNeedFilter({ minLat, maxLat, minLng, maxLng, region: filters.region });
-  const needs = await Need.findAll({
-    where,
-    attributes: ["id", "title", "location", "locationLat", "locationLng", "urgencyScore", "aiLabel"],
-    limit,
-    raw: true
-  });
+  const needs = await Need.find(where, {
+    title: 1,
+    location: 1,
+    locationLat: 1,
+    locationLng: 1,
+    urgencyScore: 1,
+    aiLabel: 1
+  })
+    .limit(limit)
+    .lean();
 
   const precision = getClusterPrecision(zoom);
   const clusters = clusterNeeds(needs, precision);
@@ -150,13 +154,13 @@ async function getHotspots(filters = {}) {
 }
 
 async function getAreaSummary(location) {
-  const needs = await Need.findAll({
-    where: {
-      location: { [Op.iLike]: `%${location}%` }
-    },
-    attributes: ["id", "urgencyScore", "aiLabel", "location"],
-    raw: true
-  });
+  const needs = await Need.find({
+    location: { $regex: location, $options: "i" }
+  }, {
+    urgencyScore: 1,
+    aiLabel: 1,
+    location: 1
+  }).lean();
 
   const summary = {
     totalNeeds: needs.length,

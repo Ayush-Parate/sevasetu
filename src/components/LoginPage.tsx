@@ -11,6 +11,7 @@ import {
   Mail,
   ArrowLeft,
 } from "lucide-react";
+import { login, type AuthUser } from "../lib/api";
 
 export type Role =
   | "SUPER_ADMIN"
@@ -23,6 +24,7 @@ export type Role =
 interface RoleConfig {
   id: Role;
   title: string;
+  backendRole: AuthUser["role"];
   description: string;
   icon: any;
   color: string;
@@ -34,6 +36,7 @@ const ROLES: RoleConfig[] = [
   {
     id: "SUPER_ADMIN",
     title: "Super Admin",
+    backendRole: "Super Admin",
     description: "Full system governance and global analytics access.",
     icon: ShieldCheck,
     color: "#1e293b",
@@ -44,6 +47,7 @@ const ROLES: RoleConfig[] = [
   {
     id: "NGO_ADMIN",
     title: "NGO Admin",
+    backendRole: "NGO Admin",
     description: "Manage your organization, staff, and impact campaigns.",
     icon: Building2,
     color: "#5D8D70",
@@ -54,6 +58,7 @@ const ROLES: RoleConfig[] = [
   {
     id: "FIELD_COORDINATOR",
     title: "Field Coordinator",
+    backendRole: "Field Coordinator",
     description: "On-ground operation management and task assignment.",
     icon: MapPin,
     color: "#FFB37B",
@@ -64,6 +69,7 @@ const ROLES: RoleConfig[] = [
   {
     id: "VOLUNTEER",
     title: "Volunteer",
+    backendRole: "Volunteer",
     description: "Access your dashboard to help children in need.",
     icon: HandHeart,
     color: "#4f46e5",
@@ -74,6 +80,7 @@ const ROLES: RoleConfig[] = [
   {
     id: "VERIFIER",
     title: "Verifier",
+    backendRole: "Verifier",
     description: "Audit activities and verify impact documentation.",
     icon: CheckCircle,
     color: "#0891b2",
@@ -84,6 +91,7 @@ const ROLES: RoleConfig[] = [
   {
     id: "DONOR",
     title: "CSR Partner",
+    backendRole: "Donor",
     description: "Track impact, funding transparency, and verified field execution.",
     icon: Building2,
     color: "#5D8D70",
@@ -96,21 +104,41 @@ const ROLES: RoleConfig[] = [
 export default function LoginPage({
   onBack,
   onLoginSuccess,
+  onRequestAccount,
+  initialRole,
 }: {
   onBack: () => void;
-  onLoginSuccess: (role: Role) => void;
+  onLoginSuccess: (user: AuthUser) => void;
+  onRequestAccount: (role: Role | null) => void;
+  initialRole?: Role | null;
 }) {
-  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  const [selectedRole, setSelectedRole] = useState<Role | null>(initialRole || null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   const currentRole = ROLES.find((r) => r.id === selectedRole);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Logging in as", selectedRole, email);
-    // Simulate successful login for demo
-    if (selectedRole) onLoginSuccess(selectedRole);
+    if (!selectedRole || !currentRole) return;
+
+    setIsSubmitting(true);
+    setError("");
+
+    try {
+      const user = await login({ email, password });
+      if (user.role !== currentRole.backendRole) {
+        setError(`This account is for ${user.role}, not ${currentRole.title}.`);
+        return;
+      }
+      onLoginSuccess(user);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to authenticate");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -330,19 +358,25 @@ export default function LoginPage({
                   </button>
                 </div>
 
+                {error ? <p className="text-sm font-medium text-rose-600">{error}</p> : null}
+
                 <button
                   type="submit"
-                  className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 hover:-translate-y-0.5 shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                  disabled={isSubmitting}
+                  className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 hover:-translate-y-0.5 shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:hover:translate-y-0"
                 >
                   <ShieldCheck size={20} />
-                  Authenticate to Dashboard
+                  {isSubmitting ? "Authenticating..." : "Authenticate to Dashboard"}
                 </button>
               </form>
 
               <div className="pt-8 text-center">
                 <p className="text-slate-400 text-sm">
                   Don't have access?{" "}
-                  <button className="text-slate-900 font-bold hover:underline">
+                  <button
+                    onClick={() => onRequestAccount(selectedRole)}
+                    className="text-slate-900 font-bold hover:underline"
+                  >
                     Request an Account
                   </button>
                 </p>

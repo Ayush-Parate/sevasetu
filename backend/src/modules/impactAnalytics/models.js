@@ -1,32 +1,32 @@
-const { DataTypes } = require("sequelize");
-const { sequelize } = require("../../config/database");
+const { mongoose } = require("../../config/database");
 
-const ImpactMetric =
-  sequelize.models.ImpactMetric ||
-  sequelize.define(
-    "ImpactMetric",
-    {
-      id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
-      taskId: { type: DataTypes.UUID, allowNull: true },
-      volunteerId: { type: DataTypes.UUID, allowNull: true },
-      location: { type: DataTypes.STRING, allowNull: true },
-      peopleHelped: { type: DataTypes.INTEGER, defaultValue: 0 },
-      timeTakenMinutes: { type: DataTypes.FLOAT, defaultValue: 0 },
-      impactScore: { type: DataTypes.FLOAT, defaultValue: 0 },
-      areaImprovement: { type: DataTypes.FLOAT, defaultValue: 0 },
-      metricName: { type: DataTypes.STRING, allowNull: true },
-      metricValue: { type: DataTypes.FLOAT, allowNull: true },
-      periodLabel: { type: DataTypes.STRING, allowNull: true }
-    },
-    {
-      indexes: [
-        { fields: ["taskId"] },
-        { fields: ["volunteerId"] },
-        { fields: ["location"] },
-        { fields: ["createdAt"] },
-        { fields: ["impactScore"] }
-      ]
+const impactMetricSchema = new mongoose.Schema(
+  {
+    taskId: { type: mongoose.Schema.Types.ObjectId, ref: "Task", default: null, index: true },
+    volunteerId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true },
+    location: { type: String, default: null, index: true },
+    peopleHelped: { type: Number, default: 0 },
+    timeTakenMinutes: { type: Number, default: 0 },
+    impactScore: { type: Number, default: 0, index: true },
+    areaImprovement: { type: Number, default: 0 },
+    metricName: { type: String, default: null },
+    metricValue: { type: Number, default: null },
+    periodLabel: { type: String, default: null }
+  },
+  {
+    timestamps: true,
+    toJSON: {
+      virtuals: true,
+      versionKey: false,
+      transform: (_doc, ret) => {
+        ret.id = ret._id.toString();
+        delete ret._id;
+        return ret;
+      }
     }
-  );
+  }
+);
+
+const ImpactMetric = mongoose.models.ImpactMetric || mongoose.model("ImpactMetric", impactMetricSchema);
 
 module.exports = { ImpactMetric };

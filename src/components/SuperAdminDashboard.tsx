@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   Building2,
@@ -39,6 +39,51 @@ import Settings from "./Settings";
 import SupportAndGovernance from "./SupportAndGovernance";
 import BillingAndSubscriptionCenter from "./BillingAndSubscriptionCenter";
 import RoleLiveMap from "./RoleLiveMap";
+import { getBackendHealth } from "../lib/api";
+
+function BackendHealthBanner() {
+  const [health, setHealth] = useState<{ status: string; uptimeSeconds: number; timestamp: string } | null>(
+    null
+  );
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getBackendHealth()
+      .then((h) => {
+        if (!cancelled) {
+          setHealth(h);
+          setFailed(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <div
+      className={`rounded-2xl border px-5 py-4 flex flex-wrap items-center justify-between gap-3 ${
+        failed ? "bg-rose-50 border-rose-200 text-rose-900" : "bg-emerald-50 border-emerald-200 text-emerald-950"
+      }`}
+    >
+      <div className="text-sm font-semibold">
+        Backend{" "}
+        {failed
+          ? "health check failed — ensure API is running on the proxy target."
+          : health
+            ? `${health.status} · uptime ${health.uptimeSeconds}s`
+            : "checking…"}
+      </div>
+      {!failed && health ? (
+        <span className="text-xs font-mono opacity-80">{health.timestamp}</span>
+      ) : null}
+    </div>
+  );
+}
 
 // Types
 type ActiveView =
@@ -152,6 +197,7 @@ export default function SuperAdminDashboard({
 
   const renderDashboard = () => (
     <div className="space-y-8 animate-in fade-in duration-500">
+      <BackendHealthBanner />
       <div className="flex justify-between items-end">
         <div>
           <h2 className="text-sm font-semibold tracking-widest text-brand-green uppercase mb-2">
@@ -524,7 +570,6 @@ export default function SuperAdminDashboard({
             {activeView === "settings" && <Settings />}
             {activeView === "support" && <SupportAndGovernance />}
             {activeView === "billing" && <BillingAndSubscriptionCenter />}
-            {/* Other views would be implemented similarly */}
           </AnimatePresence>
         </div>
       </main>

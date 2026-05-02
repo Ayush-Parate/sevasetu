@@ -16,7 +16,14 @@ router.get(
   "/summary",
   authenticate,
   attachUser(),
-  authorize([ROLES.SUPER_ADMIN, ROLES.NGO_ADMIN, ROLES.FIELD_COORDINATOR, ROLES.VERIFIER, ROLES.VOLUNTEER]),
+  authorize([
+    ROLES.SUPER_ADMIN,
+    ROLES.NGO_ADMIN,
+    ROLES.FIELD_COORDINATOR,
+    ROLES.VERIFIER,
+    ROLES.VOLUNTEER,
+    ROLES.DONOR
+  ]),
   getImpactSummary
 );
 router.get(

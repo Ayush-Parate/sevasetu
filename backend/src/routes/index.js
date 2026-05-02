@@ -13,6 +13,17 @@ const impactPublicRoutes = require("./impact.routes");
 
 const router = express.Router();
 
+router.get("/health", (_req, res) => {
+  res.status(200).json({
+    success: true,
+    data: {
+      status: "ok",
+      uptimeSeconds: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString()
+    }
+  });
+});
+
 router.use("/auth", authRoutes);
 router.use("/users", userRoleRoutes);
 router.use("/needs", needRoutes);

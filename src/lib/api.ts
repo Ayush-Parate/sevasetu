@@ -11,6 +11,30 @@ export interface AuthUser {
   fullName: string;
   email: string;
   role: BackendRole;
+  emailVerified?: boolean;
+}
+
+export interface SignupResult extends AuthUser {
+  requiresVerification: boolean;
+}
+
+export interface ListedUser {
+  id: string;
+  fullName: string;
+  email: string;
+  role: string;
+  phone?: string | null;
+  trustScore?: number;
+  isActive?: boolean;
+  emailVerified?: boolean;
+  availabilityStatus?: string;
+  createdAt?: string;
+}
+
+export interface BackendHealth {
+  status: string;
+  uptimeSeconds: number;
+  timestamp: string;
 }
 
 export interface PublicRequestRecord {
@@ -39,7 +63,40 @@ interface ApiResponse<T> {
 }
 
 const ACCESS_TOKEN_KEY = "needgraph.accessToken";
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "/_/backend/api/v1").replace(/\/$/, "");
+/**
+ * - Dev (`vite`): `/api/v1` → proxied to `VITE_API_PROXY_TARGET` (see vite.config.ts).
+ * - Prod build (e.g. Vercel `vercel.json` experimental backend): `/_/backend/api/v1`.
+ * Override anytime with `VITE_API_BASE_URL` (e.g. absolute URL for split deployments).
+ */
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.DEV ? "/api/v1" : "/_/backend/api/v1")
+).replace(/\/$/, "");
+
+function safeJsonParse(raw: string): unknown | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function messageFromParsedBody(parsed: unknown): string {
+  if (!parsed || typeof parsed !== "object") return "Request failed";
+  const body = parsed as Record<string, unknown>;
+  if (typeof body.message === "string" && body.message) return body.message;
+  const details = body.details;
+  if (Array.isArray(details) && typeof details[0] === "string") return details[0];
+  return "Request failed";
+}
+
+function unwrapData<T>(parsed: unknown): T {
+  if (!parsed || typeof parsed !== "object") return undefined as T;
+  if ("data" in parsed) return (parsed as ApiResponse<T>).data;
+  return undefined as T;
+}
 
 function getAccessToken() {
   return window.localStorage.getItem(ACCESS_TOKEN_KEY);
@@ -80,13 +137,13 @@ async function request<T>(path: string, init: RequestInit = {}, allowRetry = tru
   }
 
   const raw = await response.text();
-  const parsed = raw ? JSON.parse(raw) : null;
+  const parsed = safeJsonParse(raw);
 
   if (!response.ok) {
-    throw new Error(parsed?.message || parsed?.details?.[0] || "Request failed");
+    throw new Error(messageFromParsedBody(parsed));
   }
 
-  return (parsed as ApiResponse<T>).data;
+  return unwrapData<T>(parsed);
 }
 
 async function requestJson<T>(path: string, init: RequestInit = {}, allowRetry = true): Promise<T> {
@@ -109,9 +166,11 @@ async function requestJson<T>(path: string, init: RequestInit = {}, allowRetry =
     }
   }
 
-  const parsed = await response.json();
+  const raw = await response.text();
+  const parsed = safeJsonParse(raw);
+
   if (!response.ok) {
-    throw new Error(parsed?.message || parsed?.details?.[0] || "Request failed");
+    throw new Error(messageFromParsedBody(parsed));
   }
 
   return parsed as T;
@@ -131,8 +190,13 @@ async function refreshAccessToken() {
       return false;
     }
 
-    const parsed = (await response.json()) as ApiResponse<{ accessToken: string }>;
-    setAccessToken(parsed.data.accessToken);
+    const parsed = safeJsonParse(await response.text()) as ApiResponse<{ accessToken: string }> | null;
+    const token = parsed && typeof parsed === "object" && parsed.data?.accessToken ? parsed.data.accessToken : null;
+    if (!token) {
+      setAccessToken(null);
+      return false;
+    }
+    setAccessToken(token);
     return true;
   } catch {
     setAccessToken(null);
@@ -149,7 +213,8 @@ export interface SignupPayload {
   fullName: string;
   email: string;
   password: string;
-  role?: Exclude<BackendRole, "Super Admin">;
+  /** Public signup allows Volunteer or Donor only; other roles use access requests or admins. */
+  role?: "Volunteer" | "Donor";
   phone?: string;
 }
 
@@ -164,10 +229,37 @@ export async function login(payload: LoginPayload) {
 }
 
 export async function signup(payload: SignupPayload) {
-  return request<AuthUser>("/auth/register", {
+  return request<SignupResult>("/auth/register", {
     method: "POST",
     body: JSON.stringify(payload)
   }, false);
+}
+
+export async function forgotPassword(email: string) {
+  return request<{ devResetToken?: string | null }>(
+    "/auth/forgot-password",
+    { method: "POST", body: JSON.stringify({ email }) },
+    false
+  );
+}
+
+export async function resetPassword(payload: { email: string; token: string; password: string }) {
+  return request<{ ok: boolean }>("/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  }, false);
+}
+
+export async function verifyEmail(payload: { email: string; token: string }) {
+  return request<{ id: string; fullName: string; email: string; role: string; alreadyVerified?: boolean }>(
+    "/auth/verify-email",
+    { method: "POST", body: JSON.stringify(payload) },
+    false
+  );
+}
+
+export async function getBackendHealth() {
+  return request<BackendHealth>("/health", { method: "GET" }, false);
 }
 
 export async function logout() {
@@ -176,6 +268,10 @@ export async function logout() {
   } finally {
     setAccessToken(null);
   }
+}
+
+export async function getMe() {
+  return request<AuthUser>("/auth/me", { method: "GET" });
 }
 
 export interface PublicRequestPayload {
@@ -220,6 +316,10 @@ export async function createNeed(payload: NeedPayload) {
   });
 }
 
+export async function listNeeds() {
+  return request<NeedRecord[]>("/needs", { method: "GET" });
+}
+
 export interface TaskPayload {
   needId?: string | null;
   title: string;
@@ -241,12 +341,33 @@ export async function createTask(payload: TaskPayload) {
   });
 }
 
+export interface TaskAssignee {
+  id: string;
+  fullName: string;
+  email: string;
+}
+
+export interface TaskRecord {
+  id: string;
+  title: string;
+  description?: string | null;
+  status: string;
+  assignee?: TaskAssignee | null;
+  locationLat?: number | null;
+  locationLng?: number | null;
+  urgencyOverride?: number | null;
+  volunteerRequirement?: number;
+  completedAt?: string | null;
+  createdAt?: string;
+  needId?: string | null;
+}
+
 export async function listTasks() {
-  return request<any[]>("/tasks");
+  return request<TaskRecord[]>("/tasks");
 }
 
 export async function listUsers() {
-  return request<any[]>("/users");
+  return request<ListedUser[]>("/users");
 }
 
 export async function listPublicRequests(filters?: { status?: string; requestType?: string }) {
@@ -307,6 +428,18 @@ export async function processTextInput(text: string) {
   });
 }
 
+export async function processVoiceInput(file: File, fieldName = "file") {
+  const formData = new FormData();
+  formData.append(fieldName, file);
+  return request<{ mode: string; transcript?: string; normalizedText?: string; classificationReady?: boolean }>(
+    "/files/input/voice",
+    {
+      method: "POST",
+      body: formData
+    }
+  );
+}
+
 export async function uploadEvidence(file: File, fieldName = "file") {
   const formData = new FormData();
   formData.append(fieldName, file);
@@ -314,4 +447,58 @@ export async function uploadEvidence(file: File, fieldName = "file") {
     method: "POST",
     body: formData
   });
+}
+
+export type HeatmapPointPayload = {
+  location: string;
+  lat: number;
+  lng: number;
+  needType?: string;
+  severity?: number;
+  notes?: string;
+};
+
+export async function getGeoHeatmap() {
+  return request<any>("/geo-heatmap/heatmap", { method: "GET" });
+}
+
+export async function getGeoHotspots() {
+  return request<any>("/geo-heatmap/hotspots", { method: "GET" });
+}
+
+export async function getGeoAreaSummary(location: string) {
+  return request<any>(`/geo-heatmap/area-summary/${encodeURIComponent(location)}`, { method: "GET" });
+}
+
+export async function createHeatmapPoint(payload: HeatmapPointPayload) {
+  return request<any>("/geo-heatmap", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export interface ImpactSummary {
+  totals: { tasksCompleted: number; peopleHelped: number };
+  averages: { responseTimeHours: number; resolutionTimeHours: number };
+  areaImprovementTrends: Array<{
+    location: string;
+    averageAreaImprovement: number;
+    dataPoints: number;
+  }>;
+  volunteerPerformance: Array<{
+    volunteerId: string;
+    assignedCount: number;
+    completedCount: number;
+    successRate: number;
+    avgResolutionHours: number;
+  }>;
+}
+
+export async function getImpactSummary() {
+  return request<ImpactSummary>("/impact-analytics/summary", { method: "GET" });
+}
+
+export async function getImpactTask(taskId: string) {
+  return request<any>(`/impact-analytics/task/${encodeURIComponent(taskId)}`, { method: "GET" });
+}
+
+export async function getImpactArea(location: string) {
+  return request<any>(`/impact-analytics/area/${encodeURIComponent(location)}`, { method: "GET" });
 }

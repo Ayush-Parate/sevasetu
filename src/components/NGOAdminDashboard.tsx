@@ -42,9 +42,6 @@ import NGOSettings from "./ngo/Settings";
 import EmergencyEscalationCenter from "./EmergencyEscalationCenter";
 import RoleLiveMap from "./RoleLiveMap";
 
-// Sub-components would be created in reality, but for now we'll mock them
-// and build a rich "Mission Control Overview"
-
 type SidebarItemProps = {
   label: string;
   icon: any;
@@ -806,41 +803,6 @@ export default function NGOAdminDashboard({
             {activeView === "donor_reports" && <DonorCSRReports key="donor_reports" />}
             {activeView === "emergency" && <EmergencyEscalationCenter key="emergency" />}
             {activeView === "settings" && <NGOSettings key="settings" />}
-
-            {/* Mock up other views briefly */}
-            {activeView !== "dashboard" &&
-              activeView !== "need_intelligence" &&
-              activeView !== "volunteer" &&
-              activeView !== "campaigns" &&
-              activeView !== "heatmap" &&
-              activeView !== "task_assignment" &&
-              activeView !== "reports" &&
-              activeView !== "analytics" &&
-              activeView !== "coordinators" &&
-              activeView !== "collaboration" &&
-              activeView !== "donor_reports" &&
-              activeView !== "emergency" &&
-              activeView !== "settings" && (
-                <div key="fallback" className="flex flex-col items-center justify-center h-[60vh] animate-in fade-in zoom-in-95 duration-300">
-                <div className="w-24 h-24 bg-white rounded-3xl border border-slate-100 shadow-sm flex items-center justify-center mb-6">
-                  <LayoutDashboard size={40} className="text-slate-300" />
-                </div>
-                <h2 className="text-2xl font-bold text-slate-900 mb-2 capitalize">
-                  {activeView.replace("_", " ")} Layout
-                </h2>
-                <p className="text-slate-500 max-w-sm text-center mb-8">
-                  This module of the operational command center represents the
-                  interface for handling {activeView.replace("_", " ")}{" "}
-                  procedures within the local region.
-                </p>
-                <button
-                  onClick={() => setActiveView("dashboard")}
-                  className="px-6 py-3 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-md hover:bg-slate-800 transition-colors"
-                >
-                  Return to Dashboard
-                </button>
-              </div>
-            )}
           </AnimatePresence>
         </div>
       </div>

@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ShieldCheck,
@@ -11,7 +12,7 @@ import {
   Mail,
   ArrowLeft,
 } from "lucide-react";
-import { login, signup, type AuthUser } from "../lib/api";
+import { login, signup, verifyEmail, type AuthUser } from "../lib/api";
 
 export type Role =
   | "SUPER_ADMIN"
@@ -20,6 +21,8 @@ export type Role =
   | "VOLUNTEER"
   | "VERIFIER"
   | "DONOR";
+
+const SELF_SERVE_SIGNUP_ROLES = new Set<Role>(["VOLUNTEER", "DONOR"]);
 
 interface RoleConfig {
   id: Role;
@@ -86,7 +89,7 @@ const ROLES: RoleConfig[] = [
     color: "#0891b2",
     lightColor: "#ecfeff",
     image:
-      "https://images.unsplash.com/photo-1454165833762-01d67846471z?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1454165833762-01d67846471c?q=80&w=1200&auto=format&fit=crop",
   },
   {
     id: "DONOR",
@@ -116,11 +119,17 @@ export default function LoginPage({
 }) {
   const [selectedRole, setSelectedRole] = useState<Role | null>(initialRole || null);
   const [authMode, setAuthMode] = useState<"login" | "signup">(initialAuthMode || "login");
+  useEffect(() => {
+    setAuthMode(initialAuthMode || "login");
+  }, [initialAuthMode]);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [verifyGate, setVerifyGate] = useState<{ email: string } | null>(null);
+  const [verifyTokenInput, setVerifyTokenInput] = useState("");
+  const navigate = useNavigate();
 
   const currentRole = ROLES.find((r) => r.id === selectedRole);
 
@@ -137,6 +146,7 @@ export default function LoginPage({
         setError(`This account is for ${user.role}, not ${currentRole.title}.`);
         return;
       }
+      setVerifyGate(null);
       onLoginSuccess(user);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to authenticate");
@@ -154,20 +164,56 @@ export default function LoginPage({
       return;
     }
 
+    if (!SELF_SERVE_SIGNUP_ROLES.has(selectedRole)) {
+      setError(
+        "Public signup is only for Volunteers and CSR Partners (Donors). Request NGO Admin, Field Coordinator, or Verifier access from the home page instead."
+      );
+      return;
+    }
+
     setIsSubmitting(true);
     setError("");
 
     try {
-      await signup({
+      const created = await signup({
         fullName,
         email,
         password,
-        role: currentRole.backendRole as Exclude<AuthUser["role"], "Super Admin">,
+        role: currentRole.backendRole === "Volunteer" || currentRole.backendRole === "Donor" ? currentRole.backendRole : "Volunteer",
       });
+
+      if (created.requiresVerification) {
+        setVerifyGate({ email: created.email.trim().toLowerCase() });
+        setVerifyTokenInput("");
+        return;
+      }
+
       const user = await login({ email, password });
+      if (user.role !== currentRole.backendRole) {
+        setError(`This account is for ${user.role}, not ${currentRole.title}.`);
+        return;
+      }
+      setVerifyGate(null);
       onLoginSuccess(user);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to sign up");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleVerifyEmailThenLogin = async () => {
+    if (!verifyGate || !verifyTokenInput.trim()) return;
+    setIsSubmitting(true);
+    setError("");
+    try {
+      await verifyEmail({ email: verifyGate.email, token: verifyTokenInput.trim() });
+      const user = await login({ email: verifyGate.email, password });
+      setVerifyGate(null);
+      setVerifyTokenInput("");
+      onLoginSuccess(user);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Verification failed");
     } finally {
       setIsSubmitting(false);
     }
@@ -337,6 +383,7 @@ export default function LoginPage({
                   onClick={() => {
                     setAuthMode("login");
                     setError("");
+                    setVerifyGate(null);
                   }}
                   className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors ${
                     authMode === "login" ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-900"
@@ -350,6 +397,7 @@ export default function LoginPage({
                     setAuthMode("signup");
                     onSignupAccount(selectedRole);
                     setError("");
+                    setVerifyGate(null);
                   }}
                   className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors ${
                     authMode === "signup" ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-900"
@@ -428,12 +476,37 @@ export default function LoginPage({
                   <button
                     type="button"
                     className="text-sm text-brand-green font-bold hover:underline"
+                    onClick={() => navigate("/forgot-password")}
                   >
                     Forgot Password?
                   </button>
                 </div>
 
                 {error ? <p className="text-sm font-medium text-rose-600">{error}</p> : null}
+
+                {verifyGate ? (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 space-y-3">
+                    <p className="text-xs font-semibold text-amber-900">
+                      Email verification required for <span className="font-mono">{verifyGate.email}</span>. Paste the
+                      token from server logs (when REQUIRE_EMAIL_VERIFICATION=true), then continue.
+                    </p>
+                    <input
+                      type="text"
+                      value={verifyTokenInput}
+                      onChange={(e) => setVerifyTokenInput(e.target.value)}
+                      placeholder="Verification token"
+                      className="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-green/20"
+                    />
+                    <button
+                      type="button"
+                      disabled={isSubmitting || !verifyTokenInput.trim()}
+                      onClick={() => void handleVerifyEmailThenLogin()}
+                      className="w-full py-3 bg-amber-900 text-white rounded-xl font-bold text-sm disabled:opacity-50"
+                    >
+                      {isSubmitting ? "Verifying…" : "Verify email & sign in"}
+                    </button>
+                  </div>
+                ) : null}
 
                 <button
                   type="submit"
@@ -463,6 +536,7 @@ export default function LoginPage({
                         setAuthMode("login");
                       }
                       setError("");
+                      setVerifyGate(null);
                     }}
                     className="text-slate-900 font-bold hover:underline"
                   >

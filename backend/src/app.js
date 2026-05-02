@@ -10,7 +10,27 @@ const logger = require("./config/logger");
 const app = express();
 
 app.use(helmet());
-app.use(cors());
+const rawOrigins = process.env.CORS_ORIGIN || "";
+const allowedOrigins = rawOrigins
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+const isProd = (process.env.NODE_ENV || "development") === "production";
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow same-origin / server-to-server and non-browser clients (no Origin header).
+      if (!origin) return callback(null, true);
+      if (!allowedOrigins.length) {
+        if (isProd) return callback(new Error("Not allowed by CORS"));
+        return callback(null, true);
+      }
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true
+  })
+);
 app.use(cookieParser());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));

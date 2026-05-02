@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Brain,
   MapPin,
@@ -18,19 +18,38 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useToast } from "../Toast";
+import { createTask, listNeeds, type NeedRecord } from "../../lib/api";
+import { useAsync } from "../../lib/useAsync";
 
 type SubView = "queue" | "critical" | "history";
 
+function toPriorityLabel(need: NeedRecord) {
+  const score = need.priorityScore ?? need.urgencyScore ?? 0;
+  if (score >= 85) return "Critical";
+  if (score >= 70) return "High";
+  if (score >= 50) return "Medium";
+  return "Low";
+}
+
 export default function NeedIntelligenceCenter() {
   const [activeView, setActiveView] = useState<SubView>("queue");
-  const [selectedNeed, setSelectedNeed] = useState<any>(null);
+  const [selectedNeed, setSelectedNeed] = useState<NeedRecord | null>(null);
   const { showToast } = useToast();
 
   const handleAction = (action: string) => {
     showToast(`${action} has been triggered successfully.`, "success");
   };
 
-  const renderNeedDetails = (need: any) => (
+  const { data: needs, loading, error, reload } = useAsync(listNeeds);
+
+  const normalizedNeeds = useMemo(() => {
+    return (needs || []).map((n) => ({
+      ...n,
+      priority: toPriorityLabel(n),
+    }));
+  }, [needs]);
+
+  const renderNeedDetails = (need: NeedRecord & { priority: string }) => (
     <motion.div
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
@@ -61,15 +80,15 @@ export default function NeedIntelligenceCenter() {
       <div className="grid grid-cols-2 gap-4 mb-8">
         <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100/50">
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
-            Affected Population
+            AI Label
           </div>
-          <div className="text-lg font-bold text-slate-900">{need.pop}</div>
+          <div className="text-lg font-bold text-slate-900">{need.aiLabel || "UNCLASSIFIED"}</div>
         </div>
         <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100/50">
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
-            Reported Time
+            Priority Score
           </div>
-          <div className="text-lg font-bold text-slate-900">{need.time}</div>
+          <div className="text-lg font-bold text-slate-900">{need.priorityScore ?? need.urgencyScore ?? "—"}</div>
         </div>
       </div>
 
@@ -79,10 +98,7 @@ export default function NeedIntelligenceCenter() {
             Description & Context
           </h4>
           <p className="text-sm text-slate-600 leading-relaxed">
-            Local informants report a critical shortage of basic supplies after
-            the infrastructure damage in {need.location}. The population is
-            currently without stable support, and escalation is likely if
-            intervention doesn't occur in the next 24 hours.
+            {need.description}
           </p>
         </div>
 
@@ -91,18 +107,32 @@ export default function NeedIntelligenceCenter() {
             Intelligence Signal
           </h4>
           <p className="text-xs text-indigo-700 leading-relaxed">
-            Platform AI detected a 45% increase in similar reports from this
-            grid. This is classified as a Cluster-Initiated Resource Need.
+            {need.aiLabel
+              ? `AI classified this need as ${need.aiLabel}.`
+              : "AI classification pending; use intake signals + verification to refine."}
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-2">
         <button
-          onClick={() => handleAction(`Assigning volunteer to ${need.id}`)}
+          onClick={async () => {
+            try {
+              await createTask({
+                needId: need.id,
+                title: need.title,
+                description: need.description,
+                locationLat: need.locationLat,
+                locationLng: need.locationLng,
+              });
+              showToast("Task created from need.", "success");
+            } catch (e) {
+              showToast(e instanceof Error ? e.message : "Unable to create task", "error");
+            }
+          }}
           className="w-full py-3 bg-brand-green text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:brightness-110 transition-all"
         >
-          <Users size={18} /> Assign Field Volunteer
+          <Users size={18} /> Convert Need → Task
         </button>
         <div className="grid grid-cols-2 gap-2">
           <button
@@ -125,43 +155,29 @@ export default function NeedIntelligenceCenter() {
   const renderQueue = () => (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
       <div className="space-y-4">
-        {[
-          {
-            id: "ND-8942",
-            title: "Urgent Medical Supply Required",
-            location: "Sector 4 Clinic",
-            pop: "50+ people",
-            priority: "Critical",
-            status: "Unassigned",
-            vol: "None",
-            coord: "Priya M.",
-            time: "10 mins ago",
-          },
-          {
-            id: "ND-8943",
-            title: "Food Rations Shortage",
-            location: "Camp Alpha",
-            pop: "200 families",
-            priority: "High",
-            status: "Pending Verification",
-            vol: "None",
-            coord: "Rahul S.",
-            time: "1 hr ago",
-          },
-          {
-            id: "ND-8944",
-            title: "Post-Storm Shelter Request",
-            location: "North District",
-            pop: "15 families",
-            priority: "Medium",
-            status: "Under Review",
-            vol: "Amit K.",
-            coord: "Amit K.",
-            time: "3 hrs ago",
-          },
-        ].map((need, i) => (
+        {loading ? (
+          <div className="bg-white p-6 rounded-2xl border border-slate-100 text-slate-500">
+            Loading needs…
+          </div>
+        ) : error ? (
+          <div className="bg-rose-50 p-6 rounded-2xl border border-rose-100 text-rose-700">
+            <div className="font-bold mb-2">Failed to load needs</div>
+            <div className="text-sm opacity-90">{error.message}</div>
+            <button
+              onClick={reload}
+              className="mt-4 px-4 py-2 bg-white border border-rose-200 rounded-xl text-xs font-bold hover:bg-rose-100 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        ) : normalizedNeeds.length === 0 ? (
+          <div className="bg-white p-6 rounded-2xl border border-slate-100 text-slate-500">
+            No needs yet.
+          </div>
+        ) : (
+          normalizedNeeds.map((need) => (
           <div
-            key={i}
+            key={need.id}
             onClick={() => setSelectedNeed(need)}
             className={`cursor-pointer bg-white p-5 rounded-2xl border transition-all shadow-sm ${
               selectedNeed?.id === need.id
@@ -177,7 +193,9 @@ export default function NeedIntelligenceCenter() {
                       ? "bg-rose-100 text-rose-700"
                       : need.priority === "High"
                         ? "bg-amber-100 text-amber-700"
-                        : "bg-indigo-100 text-indigo-700"
+                      : need.priority === "Medium"
+                        ? "bg-indigo-100 text-indigo-700"
+                        : "bg-emerald-100 text-emerald-700"
                   }`}
                 >
                   {need.priority}
@@ -197,11 +215,12 @@ export default function NeedIntelligenceCenter() {
               <ChevronRight size={20} />
             </div>
           </div>
-        ))}
+          ))
+        )}
       </div>
       <div>
         {selectedNeed ? (
-          renderNeedDetails(selectedNeed)
+          renderNeedDetails({ ...selectedNeed, priority: toPriorityLabel(selectedNeed) })
         ) : (
           <div className="bg-slate-50 border border-dashed border-slate-200 rounded-3xl p-12 text-center h-full flex flex-col items-center justify-center min-h-[400px]">
             <Brain size={48} className="text-slate-200 mb-4" />
@@ -431,8 +450,8 @@ export default function NeedIntelligenceCenter() {
       {/* Tabs */}
       <div className="flex flex-wrap gap-2 mb-6">
         {[
-          { id: "queue", label: "Need Queue", count: 142 },
-          { id: "critical", label: "Critical Needs", count: 24 },
+          { id: "queue", label: "Need Queue", count: normalizedNeeds.length },
+          { id: "critical", label: "Critical Needs", count: normalizedNeeds.filter((n) => n.priority === "Critical").length },
           { id: "history", label: "Need History", count: 0 },
         ].map((tab) => (
           <button

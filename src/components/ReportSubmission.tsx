@@ -17,7 +17,7 @@ import {
   ArrowRight
 } from "lucide-react";
 import { useToast } from "./Toast";
-import { createNeed, processTextInput, uploadEvidence } from "../lib/api";
+import { createNeed, processTextInput, processVoiceInput, uploadEvidence } from "../lib/api";
 
 type InputType = "TEXT" | "IMAGE" | "SCAN" | "AUDIO" | "PDF" | "CSV" | "FORM";
 
@@ -59,6 +59,13 @@ export default function ReportSubmission() {
         const processed = await processTextInput(formData.quickText);
         description = processed.normalizedText || formData.quickText;
         title = "Quick Community Report";
+      } else if (selectedType === "AUDIO") {
+        if (!selectedFile) {
+          throw new Error("Please select a voice note before submitting.");
+        }
+        const processed = await processVoiceInput(selectedFile);
+        description = processed.normalizedText || processed.transcript || `Voice intake: ${selectedFile.name}`;
+        title = "Voice Intake";
       } else if (selectedType && selectedType !== "FORM") {
         if (!selectedFile) {
           throw new Error("Please select a file before submitting.");

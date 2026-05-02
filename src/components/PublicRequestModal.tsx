@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { X } from "lucide-react";
-import { createPublicRequest, signup, type BackendRole, type PublicRequestPayload } from "../lib/api";
+import { createPublicRequest, signup, type PublicRequestPayload } from "../lib/api";
 
 type RequestType = PublicRequestPayload["requestType"];
 
@@ -40,13 +40,8 @@ const REQUEST_COPY: Record<
   }
 };
 
-const SIGNUP_ROLE_OPTIONS: Array<Exclude<BackendRole, "Super Admin">> = [
-  "Volunteer",
-  "Field Coordinator",
-  "NGO Admin",
-  "Verifier",
-  "Donor"
-];
+/** Matches backend self-signup policy (Volunteer & Donor only). */
+const SIGNUP_ROLE_OPTIONS: Array<"Volunteer" | "Donor"> = ["Volunteer", "Donor"];
 
 interface Props {
   requestType: RequestType;
@@ -82,11 +77,13 @@ export default function PublicRequestModal({
 
     try {
       if (isSignup) {
-        const requestedRole = (SIGNUP_ROLE_OPTIONS.includes(form.roleRequested as any)
-          ? (form.roleRequested as Exclude<BackendRole, "Super Admin">)
-          : "Volunteer");
+        const requestedRole: "Volunteer" | "Donor" = SIGNUP_ROLE_OPTIONS.includes(
+          form.roleRequested as "Volunteer" | "Donor"
+        )
+          ? (form.roleRequested as "Volunteer" | "Donor")
+          : "Volunteer";
 
-        await signup({
+        const created = await signup({
           fullName: form.fullName,
           email: form.email,
           password: form.password,
@@ -94,7 +91,13 @@ export default function PublicRequestModal({
           phone: form.phone || undefined
         });
 
-        onSuccess("Signup successful. Please log in with your new credentials.");
+        if (created.requiresVerification) {
+          onSuccess(
+            "Account created — verify email using the token in API logs (development), then sign in."
+          );
+        } else {
+          onSuccess("Signup successful. Please log in with your new credentials.");
+        }
       } else {
         await createPublicRequest({
           requestType,

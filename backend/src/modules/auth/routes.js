@@ -1,7 +1,25 @@
 const express = require("express");
-const { register, registerAdmin, login, refresh, logout, me } = require("./controller");
+const {
+  register,
+  registerAdmin,
+  login,
+  refresh,
+  logout,
+  me,
+  forgotPassword,
+  resetPassword,
+  verifyEmail
+} = require("./controller");
 const { validate } = require("../../middlewares/validate.middleware");
-const { loginSchema, registerSchema, adminRegisterSchema, refreshSchema } = require("./validation");
+const {
+  loginSchema,
+  registerSchema,
+  adminRegisterSchema,
+  refreshSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  verifyEmailSchema
+} = require("./validation");
 const { authenticate, attachUser, authorize } = require("../../middlewares/auth.middleware");
 const { ROLES } = require("../../constants/roles");
 
@@ -17,6 +35,9 @@ router.post(
   registerAdmin
 );
 router.post("/login", validate(loginSchema), login);
+router.post("/forgot-password", validate(forgotPasswordSchema), forgotPassword);
+router.post("/reset-password", validate(resetPasswordSchema), resetPassword);
+router.post("/verify-email", validate(verifyEmailSchema), verifyEmail);
 router.post("/refresh", validate(refreshSchema), refresh);
 router.post("/logout", authenticate, attachUser(), logout);
 router.get("/me", authenticate, attachUser(), me);

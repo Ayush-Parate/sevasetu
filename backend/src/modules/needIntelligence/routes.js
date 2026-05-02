@@ -16,7 +16,7 @@ router.post(
   "/",
   authenticate,
   attachUser(),
-  authorize([ROLES.SUPER_ADMIN, ROLES.NGO_ADMIN, ROLES.FIELD_COORDINATOR]),
+  authorize([ROLES.SUPER_ADMIN, ROLES.NGO_ADMIN, ROLES.FIELD_COORDINATOR, ROLES.VOLUNTEER]),
   createNeed
 );
 

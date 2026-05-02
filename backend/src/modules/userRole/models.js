@@ -16,7 +16,12 @@ const userSchema = new mongoose.Schema(
     trustScore: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
     refreshTokenHash: { type: String, default: null },
-    refreshTokenExpiresAt: { type: Date, default: null }
+    refreshTokenExpiresAt: { type: Date, default: null },
+    emailVerified: { type: Boolean, default: true },
+    emailVerificationTokenHash: { type: String, default: null },
+    emailVerificationExpiresAt: { type: Date, default: null },
+    passwordResetTokenHash: { type: String, default: null },
+    passwordResetExpiresAt: { type: Date, default: null }
   },
   {
     timestamps: true,
@@ -26,6 +31,10 @@ const userSchema = new mongoose.Schema(
       transform: (_doc, ret) => {
         ret.id = ret._id.toString();
         delete ret._id;
+        delete ret.passwordHash;
+        delete ret.refreshTokenHash;
+        delete ret.emailVerificationTokenHash;
+        delete ret.passwordResetTokenHash;
         return ret;
       }
     }

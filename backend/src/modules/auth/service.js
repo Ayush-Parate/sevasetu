@@ -3,16 +3,18 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { User } = require("../userRole/models");
 const { ROLES } = require("../../constants/roles");
+const logger = require("../../config/logger");
+const { sendVerificationEmail, sendPasswordResetEmail } = require("../../utils/email");
 
 const DEFAULT_SUPER_ADMIN_EMAIL = "superadmin@janconnect.local";
 const DEFAULT_SUPER_ADMIN_PASSWORD = "SuperAdmin@123";
-const PUBLIC_SIGNUP_ROLES = new Set([
-  ROLES.NGO_ADMIN,
-  ROLES.FIELD_COORDINATOR,
-  ROLES.VOLUNTEER,
-  ROLES.VERIFIER,
-  ROLES.DONOR
-]);
+
+/** Volunteer & Donor only — NGO Admin / FC / Verifier via `/register-admin` or public intake approval. */
+const SELF_SIGNUP_ROLES = new Set([ROLES.VOLUNTEER, ROLES.DONOR]);
+
+function emailVerificationRequired() {
+  return process.env.REQUIRE_EMAIL_VERIFICATION === "true";
+}
 
 function signAccessToken(user) {
   return jwt.sign(
@@ -46,20 +48,65 @@ function parseJwtExpiryToDate(expiresIn) {
 }
 
 async function registerPublic(payload) {
-  const existing = await User.findOne({ email: payload.email.toLowerCase() });
+  const normalizedEmail = payload.email.toLowerCase();
+  const existing = await User.findOne({ email: normalizedEmail });
   if (existing) {
     throw { statusCode: 409, message: "Email already exists" };
   }
 
   const passwordHash = await bcrypt.hash(payload.password, 10);
   const requestedRole =
-    payload.role && PUBLIC_SIGNUP_ROLES.has(payload.role) ? payload.role : ROLES.VOLUNTEER;
+    payload.role && SELF_SIGNUP_ROLES.has(payload.role) ? payload.role : ROLES.VOLUNTEER;
+
+  const needVerify = emailVerificationRequired();
+  let emailVerificationTokenHash = null;
+  let emailVerificationExpiresAt = null;
+  let verificationPlain = null;
+  if (needVerify) {
+    verificationPlain = crypto.randomBytes(24).toString("hex");
+    emailVerificationTokenHash = await bcrypt.hash(verificationPlain, 10);
+    emailVerificationExpiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+  }
+
   const user = await User.create({
-    ...payload,
+    fullName: payload.fullName.trim(),
+    email: normalizedEmail,
+    phone: payload.phone || null,
     role: requestedRole,
-    passwordHash
+    passwordHash,
+    emailVerified: !needVerify,
+    emailVerificationTokenHash,
+    emailVerificationExpiresAt
   });
-  return { id: user.id, fullName: user.fullName, email: user.email, role: user.role };
+
+  const base = {
+    id: user.id,
+    fullName: user.fullName,
+    email: user.email,
+    role: user.role,
+    requiresVerification: needVerify,
+    emailVerified: user.emailVerified !== false
+  };
+
+  if (needVerify && verificationPlain) {
+    let mailSent = false;
+    try {
+      mailSent = await sendVerificationEmail(user.email, verificationPlain);
+    } catch (err) {
+      logger.error("sendVerificationEmail threw", { message: err?.message });
+    }
+    if (
+      !mailSent &&
+      (process.env.NODE_ENV || "development") !== "production"
+    ) {
+      logger.info("Email verification token (development fallback — configure SMTP to mail users)", {
+        email: user.email,
+        token: verificationPlain
+      });
+    }
+  }
+
+  return base;
 }
 
 async function registerAdmin(payload) {
@@ -67,7 +114,14 @@ async function registerAdmin(payload) {
   if (existing) throw { statusCode: 409, message: "Email already exists" };
 
   const passwordHash = await bcrypt.hash(payload.password, 10);
-  const user = await User.create({ ...payload, passwordHash });
+  const user = await User.create({
+    ...payload,
+    email: payload.email.toLowerCase(),
+    passwordHash,
+    emailVerified: true,
+    emailVerificationTokenHash: null,
+    emailVerificationExpiresAt: null
+  });
   return { id: user.id, fullName: user.fullName, email: user.email, role: user.role };
 }
 
@@ -89,10 +143,13 @@ async function issueTokensForUser(user) {
 
 async function login({ email, password }) {
   const normalizedEmail = email.toLowerCase();
-  const fixedSuperAdminEmail = (process.env.SUPER_ADMIN_EMAIL || DEFAULT_SUPER_ADMIN_EMAIL).toLowerCase();
-  const fixedSuperAdminPassword = process.env.SUPER_ADMIN_PASSWORD || DEFAULT_SUPER_ADMIN_PASSWORD;
+  const isProd = (process.env.NODE_ENV || "development") === "production";
+  const fixedSuperAdminEmail = (process.env.SUPER_ADMIN_EMAIL || (isProd ? null : DEFAULT_SUPER_ADMIN_EMAIL))?.toLowerCase();
+  const fixedSuperAdminPassword = process.env.SUPER_ADMIN_PASSWORD || (isProd ? null : DEFAULT_SUPER_ADMIN_PASSWORD);
   const isFixedSuperAdminLogin =
-    normalizedEmail === fixedSuperAdminEmail && password === fixedSuperAdminPassword;
+    Boolean(fixedSuperAdminEmail && fixedSuperAdminPassword) &&
+    normalizedEmail === fixedSuperAdminEmail &&
+    password === fixedSuperAdminPassword;
 
   if (isFixedSuperAdminLogin) {
     let superAdminUser = await User.findOne({ email: fixedSuperAdminEmail });
@@ -119,7 +176,8 @@ async function login({ email, password }) {
         id: superAdminUser.id,
         fullName: superAdminUser.fullName,
         email: superAdminUser.email,
-        role: superAdminUser.role
+        role: superAdminUser.role,
+        emailVerified: superAdminUser.emailVerified !== false
       }
     };
   }
@@ -137,11 +195,21 @@ async function login({ email, password }) {
     throw { statusCode: 401, message: "Invalid credentials" };
   }
 
+  if (user.emailVerified === false) {
+    throw { statusCode: 403, message: "Verify your email before signing in." };
+  }
+
   const { accessToken, refreshToken } = await issueTokensForUser(user);
   return {
     accessToken,
     refreshToken,
-    user: { id: user.id, fullName: user.fullName, email: user.email, role: user.role }
+    user: {
+      id: user.id,
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role,
+      emailVerified: user.emailVerified !== false
+    }
   };
 }
 
@@ -196,4 +264,100 @@ async function logout(userId) {
   await user.save();
 }
 
-module.exports = { registerPublic, registerAdmin, login, refreshTokens, logout, signAccessToken };
+async function requestPasswordReset({ email }) {
+  const normalizedEmail = email.toLowerCase();
+  const user = await User.findOne({ email: normalizedEmail });
+  let devToken = null;
+  let mailSent = false;
+  if (user && user.isActive) {
+    const plain = crypto.randomBytes(24).toString("hex");
+    user.passwordResetTokenHash = await bcrypt.hash(plain, 10);
+    user.passwordResetExpiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    await user.save();
+    try {
+      mailSent = await sendPasswordResetEmail(normalizedEmail, plain);
+    } catch (err) {
+      logger.error("sendPasswordResetEmail threw", { message: err?.message });
+    }
+    if (!mailSent && (process.env.NODE_ENV || "development") !== "production") {
+      logger.info("Password reset token (development fallback — configure SMTP for email delivery)", {
+        email: normalizedEmail,
+        token: plain
+      });
+      devToken = plain;
+    }
+  }
+  return { acknowledged: true, devToken, mailSent };
+}
+
+async function resetPasswordWithToken({ email, token, password }) {
+  const user = await User.findOne({ email: email.toLowerCase() });
+  if (!user?.passwordResetTokenHash || !user.passwordResetExpiresAt) {
+    throw { statusCode: 400, message: "Invalid or expired reset link" };
+  }
+  if (user.passwordResetExpiresAt.getTime() < Date.now()) {
+    throw { statusCode: 400, message: "Reset link expired" };
+  }
+  const tokenOk = await bcrypt.compare(token, user.passwordResetTokenHash);
+  if (!tokenOk) {
+    throw { statusCode: 400, message: "Invalid or expired reset link" };
+  }
+
+  user.passwordHash = await bcrypt.hash(password, 10);
+  user.passwordResetTokenHash = null;
+  user.passwordResetExpiresAt = null;
+  user.refreshTokenHash = null;
+  user.refreshTokenExpiresAt = null;
+  await user.save();
+}
+
+async function verifyEmailWithToken({ email, token }) {
+  const user = await User.findOne({ email: email.toLowerCase() });
+  if (!user) {
+    throw { statusCode: 400, message: "Invalid verification request" };
+  }
+  if (user.emailVerified !== false) {
+    return {
+      id: user.id,
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role,
+      alreadyVerified: true
+    };
+  }
+  if (!user.emailVerificationTokenHash || !user.emailVerificationExpiresAt) {
+    throw { statusCode: 400, message: "Invalid verification request" };
+  }
+  if (user.emailVerificationExpiresAt.getTime() < Date.now()) {
+    throw { statusCode: 400, message: "Verification link expired" };
+  }
+  const ok = await bcrypt.compare(token, user.emailVerificationTokenHash);
+  if (!ok) {
+    throw { statusCode: 400, message: "Invalid verification token" };
+  }
+
+  user.emailVerified = true;
+  user.emailVerificationTokenHash = null;
+  user.emailVerificationExpiresAt = null;
+  await user.save();
+
+  return {
+    id: user.id,
+    fullName: user.fullName,
+    email: user.email,
+    role: user.role,
+    alreadyVerified: false
+  };
+}
+
+module.exports = {
+  registerPublic,
+  registerAdmin,
+  login,
+  refreshTokens,
+  logout,
+  signAccessToken,
+  requestPasswordReset,
+  resetPasswordWithToken,
+  verifyEmailWithToken
+};

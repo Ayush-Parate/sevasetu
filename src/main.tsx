@@ -4,11 +4,17 @@ import App from './App.tsx';
 import './index.css';
 import "leaflet/dist/leaflet.css";
 import { ToastProvider } from './components/Toast';
+import { BrowserRouter } from "react-router-dom";
+import { AuthProvider } from "./auth/AuthContext";
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ToastProvider>
-      <App />
+      <BrowserRouter>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </BrowserRouter>
     </ToastProvider>
   </StrictMode>,
 );

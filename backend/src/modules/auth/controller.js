@@ -3,17 +3,31 @@ const { asyncHandler } = require("../../utils/asyncHandler");
 
 function setRefreshCookie(res, refreshToken) {
   const isProd = (process.env.NODE_ENV || "development") === "production";
+  const sameSiteEnv = (process.env.COOKIE_SAMESITE || "").toLowerCase();
+  const sameSite =
+    sameSiteEnv === "none" || sameSiteEnv === "lax" || sameSiteEnv === "strict"
+      ? sameSiteEnv
+      : isProd
+        ? "none"
+        : "strict";
   const cookieOptions = {
     httpOnly: true,
-    sameSite: "strict",
-    secure: isProd
+    sameSite,
+    secure: isProd || sameSite === "none"
   };
   res.cookie("refreshToken", refreshToken, cookieOptions);
 }
 
 function clearRefreshCookie(res) {
   const isProd = (process.env.NODE_ENV || "development") === "production";
-  res.clearCookie("refreshToken", { httpOnly: true, sameSite: "strict", secure: isProd });
+  const sameSiteEnv = (process.env.COOKIE_SAMESITE || "").toLowerCase();
+  const sameSite =
+    sameSiteEnv === "none" || sameSiteEnv === "lax" || sameSiteEnv === "strict"
+      ? sameSiteEnv
+      : isProd
+        ? "none"
+        : "strict";
+  res.clearCookie("refreshToken", { httpOnly: true, sameSite, secure: isProd || sameSite === "none" });
 }
 
 const register = asyncHandler(async (req, res) => {
@@ -51,8 +65,46 @@ const logout = asyncHandler(async (req, res) => {
 const me = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
-    data: { id: req.user.id, fullName: req.user.fullName, email: req.user.email, role: req.user.role }
+    data: {
+      id: req.user.id,
+      fullName: req.user.fullName,
+      email: req.user.email,
+      role: req.user.role,
+      emailVerified: req.user.emailVerified !== false
+    }
   });
 });
 
-module.exports = { register, registerAdmin, login, refresh, logout, me };
+const forgotPassword = asyncHandler(async (req, res) => {
+  const result = await service.requestPasswordReset(req.body);
+  const message = result.mailSent
+    ? "If an account exists for that email, password reset instructions were sent."
+    : "If an account exists for that email, a reset token was issued. Configure SMTP (SMTP_HOST / SMTP_USER / SMTP_PASS or SMTP_URL) to email it automatically; otherwise check API logs in development.";
+  res.status(200).json({
+    success: true,
+    message,
+    data: { devResetToken: result.devToken || undefined }
+  });
+});
+
+const resetPassword = asyncHandler(async (req, res) => {
+  await service.resetPasswordWithToken(req.body);
+  res.status(200).json({ success: true, message: "Password updated", data: { ok: true } });
+});
+
+const verifyEmail = asyncHandler(async (req, res) => {
+  const user = await service.verifyEmailWithToken(req.body);
+  res.status(200).json({ success: true, message: "Email verified", data: user });
+});
+
+module.exports = {
+  register,
+  registerAdmin,
+  login,
+  refresh,
+  logout,
+  me,
+  forgotPassword,
+  resetPassword,
+  verifyEmail
+};

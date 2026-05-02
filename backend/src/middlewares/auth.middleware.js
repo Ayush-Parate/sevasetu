@@ -18,21 +18,19 @@ function authenticate(req, _res, next) {
   }
 }
 
-function attachUser() {
-  return async (req, _res, next) => {
-    try {
-      if (!req.auth?.id) return next({ statusCode: 401, message: "Unauthorized" });
+async function attachUser(req, _res, next) {
+  try {
+    if (!req.auth?.id) return next({ statusCode: 401, message: "Unauthorized" });
 
-      const user = await User.findById(req.auth.id);
-      if (!user) return next({ statusCode: 401, message: "User not found" });
-      if (!user.isActive) return next({ statusCode: 403, message: "User is inactive" });
+    const user = await User.findById(req.auth.id);
+    if (!user) return next({ statusCode: 401, message: "User not found" });
+    if (!user.isActive) return next({ statusCode: 403, message: "User is inactive" });
 
-      req.user = user;
-      return next();
-    } catch (error) {
-      return next(error);
-    }
-  };
+    req.user = user;
+    return next();
+  } catch (error) {
+    return next(error);
+  }
 }
 
 function authorize(allowedRoles = []) {

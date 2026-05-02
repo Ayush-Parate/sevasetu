@@ -12,16 +12,12 @@ import {
   History,
   Lock
 } from "lucide-react";
-
-const transactions = [
-  { id: "TX-4921", date: "April 24, 2026", entity: "Child Health Initiative (NGO)", amount: "-$12,500.00", status: "Transferred", type: "Operational", purpose: "Medical Kit Procurement" },
-  { id: "TX-4830", date: "April 20, 2026", entity: "Direct CSR Donation", amount: "+$50,000.00", status: "Completed", type: "Funding", purpose: "Quarterly CSR Allocation" },
-  { id: "TX-4712", date: "April 15, 2026", entity: "Seva Rural Trust", amount: "-$8,200.00", status: "Verified", type: "Field Expense", purpose: "Emergency Response Hub - Sunderbans" },
-  { id: "TX-4699", date: "April 12, 2026", entity: "Digital Sakshar NGO", amount: "-$4,500.00", status: "In Audit", type: "Admin", purpose: "Platform Service Fees" },
-  { id: "TX-4550", date: "April 05, 2026", entity: "Hope Builders", amount: "-$15,000.00", status: "Completed", type: "Project", purpose: "School Infrastructure - Phase 1" },
-];
+import { useAsync } from "../../lib/useAsync";
+import { getDonorLedger } from "../../lib/api";
 
 export default function FinancialLedger() {
+  const { data: transactions = [], loading } = useAsync(getDonorLedger);
+
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
       {/* Wallet / Balance Overview */}
@@ -118,6 +114,9 @@ export default function FinancialLedger() {
             </div>
          </div>
 
+         {loading ? (
+            <div className="flex items-center justify-center py-20 text-slate-400">Loading ledger data...</div>
+         ) : (
          <div className="overflow-x-auto">
             <table className="w-full text-left">
                <thead className="bg-slate-50/50">
@@ -158,6 +157,7 @@ export default function FinancialLedger() {
                </tbody>
             </table>
          </div>
+         )}
 
          <div className="p-8 bg-slate-50/50 flex justify-center">
             <button className="text-xs font-bold text-slate-400 hover:text-slate-900 transition-colors uppercase tracking-widest flex items-center gap-2">

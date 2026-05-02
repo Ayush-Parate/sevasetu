@@ -29,6 +29,8 @@ import ProofVerificationCenter from "./fc/ProofVerificationCenter";
 import LocalAnalyticsDashboard from "./fc/LocalAnalyticsDashboard";
 import FCSettings from "./fc/FCSettings";
 import RoleLiveMap from "./RoleLiveMap";
+import { useAsync } from "../lib/useAsync";
+import { getFCStats } from "../lib/api";
 
 type DashboardView =
   | "dashboard"
@@ -89,6 +91,7 @@ export default function FieldCoordinatorDashboard({
   onLogout: () => void;
 }) {
   const [activeView, setActiveView] = useState<DashboardView>("dashboard");
+  const { data: stats } = useAsync(getFCStats);
 
   const renderDashboardOverview = () => (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -121,14 +124,14 @@ export default function FieldCoordinatorDashboard({
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {[
-          { label: "New Reports Today", value: "24", sub: "8 Urgent needs pending", icon: FileText, color: "brand-green", bg: "bg-brand-green/10", border: "border-brand-green/10", btn: "Reports Queue", alert: true },
-          { label: "Active Volunteers", value: "15", sub: "Available within 5km", icon: Users, color: "emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/10", btn: "Dispatch Center" },
-          { label: "Live Tasks", value: "32", sub: "5 delayed, 12 completed", icon: Activity, color: "brand-orange", bg: "bg-brand-orange/10", border: "border-brand-orange/10", btn: "Task Tracker" },
+          { label: "New Reports Today", value: stats?.pendingVerifications ?? "...", sub: "Urgent needs pending", icon: FileText, color: "brand-green", bg: "bg-brand-green/10", border: "border-brand-green/10", btn: "Reports Queue", alert: (stats?.pendingVerifications ?? 0) > 0 },
+          { label: "Active Volunteers", value: stats?.activeVolunteers ?? "...", sub: "Available within zone", icon: Users, color: "emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/10", btn: "Dispatch Center" },
+          { label: "Live Tasks", value: stats?.assignedTasks ?? "...", sub: `${stats?.completedTasks ?? 0} completed`, icon: Activity, color: "brand-orange", bg: "bg-brand-orange/10", border: "border-brand-orange/10", btn: "Task Tracker" },
           { label: "Area Hotspots", value: "3", sub: "Critical clusters identified", icon: Flame, color: "rose-500", bg: "bg-rose-500/10", border: "border-rose-500/10", btn: "Local Heatmap" },
-          { label: "Pending Verification", value: "18", sub: "Requires field confirmation", icon: ShieldCheck, color: "indigo-500", bg: "bg-indigo-500/10", border: "border-indigo-500/10", btn: "Verify Now" },
-          { label: "Emergency Alerts", value: "2", sub: "Active crisis interventions", icon: AlertTriangle, color: "rose-500", bg: "bg-rose-500/10", border: "border-rose-500/10", btn: "Emergency Room", pulse: true },
-          { label: "Response Speed", value: "14m", sub: "Average dispatch time", icon: Clock, color: "teal-500", bg: "bg-teal-500/10", border: "border-teal-500/10", btn: "Analytics" },
-          { label: "Community Trust", value: "9.2", sub: "Satisfaction index (0-10)", icon: CheckCircle, color: "emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/10", btn: "Feedback" },
+          { label: "Pending Verification", value: stats?.pendingVerifications ?? "...", sub: "Requires field confirmation", icon: ShieldCheck, color: "indigo-500", bg: "bg-indigo-500/10", border: "border-indigo-500/10", btn: "Verify Now" },
+          { label: "Emergency Alerts", value: stats?.emergencyAlerts ?? "...", sub: "Active crisis interventions", icon: AlertTriangle, color: "rose-500", bg: "bg-rose-500/10", border: "border-rose-500/10", btn: "Emergency Room", pulse: (stats?.emergencyAlerts ?? 0) > 0 },
+          { label: "Response Speed", value: stats?.responseSpeed ?? "...", sub: "Average dispatch time", icon: Clock, color: "teal-500", bg: "bg-teal-500/10", border: "border-teal-500/10", btn: "Analytics" },
+          { label: "Community Trust", value: stats?.communityTrust ?? "...", sub: "Satisfaction index (0-10)", icon: CheckCircle, color: "emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/10", btn: "Feedback" },
         ].map((card, i) => {
           const colorClass = card.color.includes('brand') ? `text-${card.color}` : `text-${card.color}`;
           return (

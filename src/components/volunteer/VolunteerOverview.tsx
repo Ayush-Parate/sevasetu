@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 import RoleLiveMap from "../RoleLiveMap";
+import { useAsync } from "../../lib/useAsync";
+import { getVolunteerStats } from "../../lib/api";
 
 interface OverviewCardProps {
   title: string;
@@ -53,6 +55,8 @@ const OverviewCard = ({ title, value, desc, icon: Icon, btnLabel, onClick, color
 );
 
 export default function VolunteerOverview({ setActiveTab }: { setActiveTab: (tab: any) => void }) {
+  const { data: stats } = useAsync(getVolunteerStats);
+
   const cards = [
     {
       title: "Available Tasks Near Me",
@@ -66,8 +70,8 @@ export default function VolunteerOverview({ setActiveTab }: { setActiveTab: (tab
     },
     {
       title: "My Active Tasks",
-      value: "2",
-      desc: "One delivery in progress, one verification pending.",
+      value: stats?.activeTasks ?? "...",
+      desc: `${stats?.completedTasks ?? 0} tasks completed so far.`,
       icon: CheckSquare,
       btnLabel: "Open Task Tracker",
       tab: "tasks",
@@ -87,7 +91,7 @@ export default function VolunteerOverview({ setActiveTab }: { setActiveTab: (tab
     },
     {
       title: "My Impact Score",
-      value: "850",
+      value: stats?.impactScore ?? "...",
       desc: "Top 5% of volunteers in your ward this month.",
       icon: TrendingUp,
       btnLabel: "View Impact Detail",
@@ -97,8 +101,8 @@ export default function VolunteerOverview({ setActiveTab }: { setActiveTab: (tab
     },
     {
       title: "Trust Verification",
-      value: "92%",
-      desc: "Verification Level: GOLD. You can now verify other's tasks.",
+      value: `${stats?.trustScore ?? "..."}/10`,
+      desc: `Verification Level: ${stats?.rank ?? "..."}. You can now verify other's tasks.`,
       icon: ShieldCheck,
       btnLabel: "Trust Profile",
       tab: "trust",

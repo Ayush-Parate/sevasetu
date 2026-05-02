@@ -15,14 +15,18 @@ import {
   History
 } from "lucide-react";
 import RoleLiveMap from "../RoleLiveMap";
+import { useAsync } from "../../lib/useAsync";
+import { getVerifierStats } from "../../lib/api";
 
 export default function VerifierOverview({ setActiveTab }: { setActiveTab: (tab: any) => void }) {
+  const { data: stats } = useAsync(getVerifierStats);
+
   const cards = [
     {
       id: "queue",
       title: "Pending Verifications",
-      value: "142",
-      sub: "24 Urgent",
+      value: stats?.pendingVerifications ?? "...",
+      sub: `${stats?.emergencyClaims ?? 0} Urgent`,
       icon: ClipboardList,
       color: "text-blue-500",
       bg: "bg-blue-50",
@@ -31,7 +35,7 @@ export default function VerifierOverview({ setActiveTab }: { setActiveTab: (tab:
     {
       id: "emergency",
       title: "Emergency Claims",
-      value: "08",
+      value: stats?.emergencyClaims ?? "...",
       sub: "Critical high-risk",
       icon: Zap,
       color: "text-rose-500",
@@ -41,8 +45,8 @@ export default function VerifierOverview({ setActiveTab }: { setActiveTab: (tab:
     {
       id: "proof",
       title: "Completion Proofs",
-      value: "56",
-      sub: "Awaiting OCR audit",
+      value: stats?.completedToday ?? "...",
+      sub: "Verified today",
       icon: FileCheck,
       color: "text-emerald-500",
       bg: "bg-emerald-50",
@@ -51,7 +55,7 @@ export default function VerifierOverview({ setActiveTab }: { setActiveTab: (tab:
     {
       id: "fraud",
       title: "Fraud Alerts",
-      value: "03",
+      value: stats?.fraudAlerts ?? "...",
       sub: "Suspicious telemetry",
       icon: ShieldAlert,
       color: "text-amber-500",
@@ -61,7 +65,7 @@ export default function VerifierOverview({ setActiveTab }: { setActiveTab: (tab:
     {
       id: "duplicates",
       title: "Duplicate Reports",
-      value: "12",
+      value: stats?.duplicateCount ?? "...",
       sub: "Location overlap",
       icon: Copy,
       color: "text-slate-500",
@@ -71,7 +75,7 @@ export default function VerifierOverview({ setActiveTab }: { setActiveTab: (tab:
     {
       id: "trust",
       title: "Trust Score Reviews",
-      value: "05",
+      value: stats?.trustReviews ?? "...",
       sub: "NGO/Volunteer audits",
       icon: Target,
       color: "text-brand-green",
@@ -81,7 +85,7 @@ export default function VerifierOverview({ setActiveTab }: { setActiveTab: (tab:
     {
       id: "analytics",
       title: "Verification Speed",
-      value: "22m",
+      value: stats?.verificationSpeed ?? "...",
       sub: "-4m from average",
       icon: Clock,
       color: "text-indigo-500",
@@ -91,7 +95,7 @@ export default function VerifierOverview({ setActiveTab }: { setActiveTab: (tab:
     {
       id: "analytics",
       title: "Resolution Accuracy",
-      value: "99.2%",
+      value: stats?.resolutionAccuracy ?? "...",
       sub: "+0.2% precision",
       icon: CheckCircle2,
       color: "text-cyan-500",

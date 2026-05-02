@@ -11,6 +11,11 @@ const publicIntakeRoutes = require("../modules/publicIntake/routes");
 const matchRoutes = require("./match.routes");
 const impactPublicRoutes = require("./impact.routes");
 const adminRoutes = require("../modules/admin/routes");
+const ngoRoutes = require("../modules/ngo/routes");
+const fcRoutes = require("../modules/fc/routes");
+const volunteerModuleRoutes = require("../modules/volunteer/routes");
+const verifierRoutes = require("../modules/verifier/routes");
+const donorRoutes = require("../modules/donor/routes");
 
 const router = express.Router();
 
@@ -37,5 +42,10 @@ router.use("/files", fileRoutes);
 router.use("/public", publicIntakeRoutes);
 router.use("/match-volunteers", matchRoutes);
 router.use("/admin", adminRoutes);
+router.use("/ngo", ngoRoutes);
+router.use("/fc", fcRoutes);
+router.use("/volunteer", volunteerModuleRoutes);
+router.use("/verifier", verifierRoutes);
+router.use("/donor", donorRoutes);
 
 module.exports = router;

@@ -19,5 +19,12 @@ router.post(
   authorize([ROLES.SUPER_ADMIN, ROLES.NGO_ADMIN, ROLES.FIELD_COORDINATOR, ROLES.VOLUNTEER]),
   createNeed
 );
+router.patch(
+  "/:id/status",
+  authenticate,
+  attachUser(),
+  authorize([ROLES.SUPER_ADMIN, ROLES.NGO_ADMIN, ROLES.FIELD_COORDINATOR, ROLES.VERIFIER]),
+  require("./controller").updateNeedStatus
+);
 
 module.exports = router;

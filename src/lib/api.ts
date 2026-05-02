@@ -593,3 +593,166 @@ export async function getEmergencyStats() {
 export async function getRoleDistribution() {
   return request<Array<{ role: string; count: number }>>("/admin/role-distribution", { method: "GET" });
 }
+
+// ─── NGO Administration ─────────────────────────────────────────────
+
+export interface NGOStats {
+  needs: {
+    total: number;
+    critical: number;
+    highPriority: number;
+    pending: number;
+  };
+  volunteers: {
+    total: number;
+    available: number;
+    onTask: number;
+    emergencyResponders: number;
+  };
+  tasks: {
+    total: number;
+    completed: number;
+    completedToday: number;
+    completedThisWeek: number;
+    open: number;
+    resolutionRate: number;
+  };
+}
+
+export interface EnrichedVolunteer {
+  id: string;
+  fullName: string;
+  email: string;
+  role: string;
+  availabilityStatus: string;
+  trustScore: number;
+  skills?: string[];
+  locationLat?: number;
+  locationLng?: number;
+  createdAt?: string;
+  taskCount: number;
+  completedCount: number;
+  successRate: number;
+}
+
+export async function getNGOStats() {
+  return request<NGOStats>("/ngo/stats", { method: "GET" });
+}
+
+export async function listNGOVolunteers(status?: string) {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  return request<EnrichedVolunteer[]>(`/ngo/volunteers${query}`, { method: "GET" });
+}
+
+export async function listNGOFieldCoordinators() {
+  return request<any[]>("/ngo/field-coordinators", { method: "GET" });
+}
+
+export async function updateNeedStatus(id: string, status: string) {
+  return request<{ success: boolean }>(`/needs/${id}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status })
+  });
+}
+
+// ─── Field Coordinator Administration ─────────────────────────────────────────────
+
+export interface FCStats {
+  assignedTasks: number;
+  completedTasks: number;
+  resolutionRate: string;
+  pendingVerifications: number;
+  activeVolunteers: number;
+  emergencyAlerts: number;
+  responseSpeed: string;
+  communityTrust: string;
+}
+
+export async function getFCStats() {
+  return request<FCStats>("/fc/stats", { method: "GET" });
+}
+
+export async function listFCVolunteers() {
+  return request<any[]>("/fc/volunteers", { method: "GET" });
+}
+
+// ─── Volunteer Dashboard ────────────────────────────────────────────────────────
+
+export interface VolunteerStats {
+  activeTasks: number;
+  completedTasks: number;
+  impactScore: number;
+  trustScore: number;
+  hoursLogged: number;
+  rank: string;
+}
+
+export async function getVolunteerStats() {
+  return request<VolunteerStats>("/volunteer/stats", { method: "GET" });
+}
+
+// ─── Verifier Dashboard ────────────────────────────────────────────────────────
+
+export interface VerifierStats {
+  pendingVerifications: number;
+  emergencyClaims: number;
+  completedToday: number;
+  fraudAlerts: number;
+  duplicateCount: number;
+  trustReviews: number;
+  verificationSpeed: string;
+  resolutionAccuracy: string;
+}
+
+export async function getVerifierStats() {
+  return request<VerifierStats>("/verifier/stats", { method: "GET" });
+}
+
+// ─── CSR / Donor Dashboard ────────────────────────────────────────────────────────
+
+export interface DonorStats {
+  activeFundingProjects: number;
+  verifiedNeeds: number;
+  totalVolunteers: number;
+  completedTasks: number;
+  livesImpacted: number;
+  totalImpactCapital: string;
+  sdgTargetsHit: string;
+  resolutionEfficiency: string;
+}
+
+export async function getDonorStats() {
+  return request<DonorStats>("/donor/stats", { method: "GET" });
+}
+
+export interface DonorMarketplaceItem {
+  id: string;
+  title: string;
+  ngo: string;
+  location: string;
+  goal: string;
+  raised: string;
+  backers: number;
+  impact: string;
+  urgency: string;
+  category: string;
+  image: string;
+}
+
+export async function getDonorMarketplace() {
+  return request<DonorMarketplaceItem[]>("/donor/marketplace", { method: "GET" });
+}
+
+export interface DonorLedgerItem {
+  id: string;
+  date: string;
+  entity: string;
+  amount: string;
+  status: string;
+  type: string;
+  purpose: string;
+}
+
+export async function getDonorLedger() {
+  return request<DonorLedgerItem[]>("/donor/ledger", { method: "GET" });
+}

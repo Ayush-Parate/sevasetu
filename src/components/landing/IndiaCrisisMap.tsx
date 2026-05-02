@@ -21,10 +21,8 @@ const DEFAULT_VOLUNTEERS: Volunteer[] = [
 ];
 
 class MapErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
-  constructor(props: { children: ReactNode }) {
-    super(props);
-    this.state = { hasError: false };
-  }
+  declare props: { children: ReactNode };
+  state: { hasError: boolean } = { hasError: false };
 
   static getDerivedStateFromError(_: Error) {
     return { hasError: true };

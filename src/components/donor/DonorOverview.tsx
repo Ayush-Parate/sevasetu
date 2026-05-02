@@ -23,6 +23,8 @@ import {
   Cell
 } from "recharts";
 import RoleLiveMap from "../RoleLiveMap";
+import { useAsync } from "../../lib/useAsync";
+import { getDonorStats } from "../../lib/api";
 
 const impactData = [
   { month: "Jan", impact: 4500, funding: 2400 },
@@ -41,15 +43,17 @@ const sdgMetrics = [
 ];
 
 export default function DonorOverview() {
+  const { data: stats } = useAsync(getDonorStats);
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Executive Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { label: "Total Impact Capital", value: "$4.2M", trend: "+12.5%", icon: Target, color: "text-brand-green", bg: "bg-brand-green/10" },
-          { label: "Lives Impacted", value: "128,430", trend: "+5.2k", icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
-          { label: "SDG Targets Hit", value: "18/24", trend: "On Track", icon: Globe, color: "text-orange-600", bg: "bg-orange-50" },
-          { label: "Resolution Efficiency", value: "92%", trend: "Optimal", icon: TrendingUp, color: "text-purple-600", bg: "bg-purple-50" },
+          { label: "Lives Impacted", value: stats?.livesImpacted?.toLocaleString() ?? "...", trend: "+5.2k", icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
+          { label: "Verified Needs", value: stats?.verifiedNeeds ?? "...", trend: "Confirmed", icon: Target, color: "text-brand-green", bg: "bg-brand-green/10" },
+          { label: "SDG Targets Hit", value: stats?.sdgTargetsHit ?? "...", trend: "On Track", icon: Globe, color: "text-orange-600", bg: "bg-orange-50" },
+          { label: "Resolution Efficiency", value: stats?.resolutionEfficiency ?? "...", trend: "Optimal", icon: TrendingUp, color: "text-purple-600", bg: "bg-purple-50" },
         ].map((stat, i) => (
           <motion.div
             key={stat.label}

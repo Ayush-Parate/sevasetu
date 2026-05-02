@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useToast } from "../Toast";
+import { useAsync } from "../../lib/useAsync";
+import { listNeeds, updateNeedStatus } from "../../lib/api";
 
 type ReportView = "pending" | "verified";
 
@@ -26,66 +28,50 @@ export default function CommunityReportsQueue() {
   const [selectedReport, setSelectedReport] = useState<any>(null);
   const { showToast } = useToast();
 
-  const handleAction = (action: string, id: string) => {
+  const { data: needs = [], loading, reload } = useAsync(listNeeds);
+
+  const pendingReports = needs
+    .filter(n => n.status === "pending")
+    .map(n => ({
+      id: "CR-" + n.id.substring(n.id.length - 4).toUpperCase(),
+      originalId: n.id,
+      source: "Platform Sync",
+      type: n.category,
+      desc: n.description,
+      risk: n.urgencyScore >= 9 ? "Critical" : n.urgencyScore >= 7 ? "High" : "Medium",
+      time: new Date(n.createdAt).toLocaleDateString(),
+      location: `Lat: ${n.locationLat.toFixed(2)}, Lng: ${n.locationLng.toFixed(2)}`,
+      duplicatePossibility: "Low",
+      reporterTrust: 4.5,
+    }));
+
+  const verifiedReports = needs
+    .filter(n => n.status !== "pending")
+    .map(n => ({
+      id: "CR-" + n.id.substring(n.id.length - 4).toUpperCase(),
+      originalId: n.id,
+      type: n.category,
+      desc: n.description,
+      location: `Lat: ${n.locationLat.toFixed(2)}, Lng: ${n.locationLng.toFixed(2)}`,
+      time: new Date(n.createdAt).toLocaleDateString(),
+      assignedCoord: "Pending Assignment",
+      status: n.status,
+    }));
+
+  const handleAction = async (action: string, id: string, realId?: string) => {
+    if (action === "Verified" && realId) {
+      try {
+        await updateNeedStatus(realId, "verified");
+        showToast(`Report ${id} verified successfully.`, "success");
+        setSelectedReport(null);
+        reload();
+      } catch (err) {
+        showToast("Failed to verify report.", "error");
+      }
+      return;
+    }
     showToast(`${action} for report ${id} processed.`, "success");
   };
-
-  const pendingReports = [
-    {
-      id: "CR-992",
-      source: "Community Member (SMS)",
-      type: "Medical",
-      desc: "Three people with high fever in Sector 2 slum area. No clinic open.",
-      risk: "High",
-      time: "10 mins ago",
-      location: "Sector 2, West District",
-      duplicatePossibility: "Low (15%)",
-      reporterTrust: 4.2,
-    },
-    {
-      id: "CR-993",
-      source: "Field Coordinator (App)",
-      type: "Supplies",
-      desc: "Blanket stock at Camp Alpha is damaged due to rain.",
-      risk: "Medium",
-      time: "1 hr ago",
-      location: "Camp Alpha, North District",
-      duplicatePossibility: "None",
-      reporterTrust: 5.0,
-    },
-    {
-      id: "CR-994",
-      source: "Anonymous Web Portal",
-      type: "Security",
-      desc: "Roadway blocked by fallen trees near main highway exit 4.",
-      risk: "Critical",
-      time: "2 hrs ago",
-      location: "Highway Exit 4",
-      duplicatePossibility: "High (85%)",
-      reporterTrust: 2.1,
-    },
-  ];
-
-  const verifiedReports = [
-    {
-      id: "CR-980",
-      type: "Food",
-      desc: "Ration shortage reported in Block G.",
-      location: "Block G, Central",
-      time: "5 hrs ago",
-      assignedCoord: "Priya Patel",
-      status: "Ready for Dispatch",
-    },
-    {
-      id: "CR-975",
-      type: "Water",
-      desc: "Main tank leakage in Sector 5.",
-      location: "Sector 5, North",
-      time: "8 hrs ago",
-      assignedCoord: "Amit Kumar",
-      status: "Task Created",
-    },
-  ];
 
   const renderReportDetail = (report: any) => (
     <motion.div
@@ -178,7 +164,7 @@ export default function CommunityReportsQueue() {
 
           <div className="grid grid-cols-2 gap-2">
             <button
-              onClick={() => handleAction("Verified", report.id)}
+              onClick={() => handleAction("Verified", report.id, report.originalId)}
               className="py-3.5 bg-emerald-500 text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20"
             >
               <CheckCircle size={18} /> Verify
@@ -269,7 +255,7 @@ export default function CommunityReportsQueue() {
               : "text-slate-500 hover:text-slate-700"
           }`}
         >
-          Pending Reports (18)
+          Pending Reports ({pendingReports.length})
         </button>
         <button
           onClick={() => setActiveView("verified")}
@@ -279,13 +265,15 @@ export default function CommunityReportsQueue() {
               : "text-slate-500 hover:text-slate-700"
           }`}
         >
-          Verified Buffer (24)
+          Verified Buffer ({verifiedReports.length})
         </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
         <div className="space-y-4">
-          {(activeView === "pending" ? pendingReports : verifiedReports).map(
+          {loading && (activeView === "pending" ? pendingReports : verifiedReports).length === 0 ? (
+            <div className="text-center text-slate-500 py-8">Loading reports...</div>
+          ) : (activeView === "pending" ? pendingReports : verifiedReports).map(
             (report) => (
               <div
                 key={report.id}
@@ -337,6 +325,9 @@ export default function CommunityReportsQueue() {
                 </div>
               </div>
             )
+          )}
+          {!loading && (activeView === "pending" ? pendingReports : verifiedReports).length === 0 && (
+            <div className="text-center text-slate-500 py-8">No reports found in this queue.</div>
           )}
         </div>
 

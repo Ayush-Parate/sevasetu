@@ -33,14 +33,16 @@ import VolunteerManagement from "./ngo/VolunteerManagement";
 import CampaignManagement from "./ngo/CampaignManagement";
 import AreaHeatmap from "./MapIntelligence";
 import TaskAssignmentCenter from "./ngo/TaskAssignmentCenter";
-import CommunityReportsQueue from "./ReportSubmission";
-import NGOAnalyticsImpact from "./TaskTracker";
+import CommunityReportsQueue from "./ngo/CommunityReportsQueue";
+import NGOAnalyticsImpact from "./ngo/NGOAnalyticsImpact";
 import FieldCoordinatorManagement from "./ngo/FieldCoordinatorManagement";
 import PartnerCollaboration from "./ngo/PartnerCollaboration";
 import DonorCSRReports from "./ngo/DonorCSRReports";
 import NGOSettings from "./ngo/Settings";
 import EmergencyEscalationCenter from "./EmergencyEscalationCenter";
 import RoleLiveMap from "./RoleLiveMap";
+import { useAsync } from "../lib/useAsync";
+import { getNGOStats } from "../lib/api";
 
 type SidebarItemProps = {
   label: string;
@@ -87,6 +89,7 @@ export default function NGOAdminDashboard({
   const [activeView, setActiveView] = useState("dashboard");
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   const { showToast } = useToast();
+  const { data: stats } = useAsync(getNGOStats);
 
   const handleAction = (
     msg: string,
@@ -127,20 +130,20 @@ export default function NGOAdminDashboard({
               </span>
             </div>
             <div className="text-3xl font-bold text-white relative z-10 mb-3">
-              142
+              {stats?.needs.total ?? "..."}
             </div>
             <div className="space-y-1 relative z-10">
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-400">Critical:</span>
-                <span className="text-rose-400 font-semibold">24</span>
+                <span className="text-rose-400 font-semibold">{stats?.needs.critical ?? "-"}</span>
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-400">High-Priority Reports:</span>
-                <span className="text-amber-400 font-semibold">58</span>
+                <span className="text-amber-400 font-semibold">{stats?.needs.highPriority ?? "-"}</span>
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-400">Pending Verification:</span>
-                <span className="text-slate-300 font-semibold">60</span>
+                <span className="text-slate-300 font-semibold">{stats?.needs.pending ?? "-"}</span>
               </div>
             </div>
           </div>
@@ -161,19 +164,19 @@ export default function NGOAdminDashboard({
                 Active Volunteers
               </span>
             </div>
-            <div className="text-3xl font-bold text-slate-900 mb-3">384</div>
+            <div className="text-3xl font-bold text-slate-900 mb-3">{stats?.volunteers.total ?? "..."}</div>
             <div className="space-y-1">
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-500">Available Now:</span>
-                <span className="text-emerald-600 font-semibold">142</span>
+                <span className="text-emerald-600 font-semibold">{stats?.volunteers.available ?? "-"}</span>
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-500">On-Task:</span>
-                <span className="text-indigo-600 font-semibold">190</span>
+                <span className="text-indigo-600 font-semibold">{stats?.volunteers.onTask ?? "-"}</span>
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-500">Emergency Responders:</span>
-                <span className="text-rose-500 font-semibold">52</span>
+                <span className="text-rose-500 font-semibold">{stats?.volunteers.emergencyResponders ?? "-"}</span>
               </div>
             </div>
           </div>
@@ -260,7 +263,7 @@ export default function NGOAdminDashboard({
                 Response Rate
               </span>
             </div>
-            <div className="text-3xl font-bold text-slate-900 mb-3">14m</div>
+            <div className="text-3xl font-bold text-slate-900 mb-3">{stats ? `${stats.tasks.resolutionRate}%` : "..."}</div>
             <div className="space-y-1">
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-500">Avg Response Speed:</span>
@@ -268,11 +271,11 @@ export default function NGOAdminDashboard({
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-500">Pending Delays:</span>
-                <span className="text-rose-500 font-semibold">18</span>
+                <span className="text-rose-500 font-semibold">{stats?.tasks.open ?? "-"}</span>
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-500">Completion Efficiency:</span>
-                <span className="text-brand-green font-semibold">92%</span>
+                <span className="text-brand-green font-semibold">{stats ? `${stats.tasks.resolutionRate}%` : "-"}</span>
               </div>
             </div>
           </div>
@@ -293,15 +296,15 @@ export default function NGOAdminDashboard({
                 Completed Tasks
               </span>
             </div>
-            <div className="text-3xl font-bold text-slate-900 mb-3">1,204</div>
+            <div className="text-3xl font-bold text-slate-900 mb-3">{stats?.tasks.completed.toLocaleString() ?? "..."}</div>
             <div className="space-y-1">
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-500">Today:</span>
-                <span className="text-emerald-600 font-semibold">42</span>
+                <span className="text-emerald-600 font-semibold">{stats?.tasks.completedToday ?? "-"}</span>
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-500">This Week:</span>
-                <span className="text-emerald-600 font-semibold">315</span>
+                <span className="text-emerald-600 font-semibold">{stats?.tasks.completedThisWeek ?? "-"}</span>
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-500">Monthly Success:</span>
@@ -658,7 +661,7 @@ export default function NGOAdminDashboard({
             icon={ClipboardList}
             active={activeView === "task_assignment"}
             onClick={() => setActiveView("task_assignment")}
-            badge={14}
+            badge={stats?.tasks.open ?? 0}
           />
           <SidebarItem
             label="Campaign Management"
@@ -677,7 +680,7 @@ export default function NGOAdminDashboard({
             icon={MessageSquare}
             active={activeView === "reports"}
             onClick={() => setActiveView("reports")}
-            badge={3}
+            badge={stats?.needs.pending ?? 0}
           />
           <SidebarItem
             label="Area Heatmap"

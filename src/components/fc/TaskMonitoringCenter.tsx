@@ -2,16 +2,27 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Activity, Clock, AlertTriangle, CheckCircle, Search, Filter, ShieldAlert, ArrowRight } from "lucide-react";
 import { useToast } from "../Toast";
+import { useAsync } from "../../lib/useAsync";
+import { listTasks } from "../../lib/api";
 
 export default function TaskMonitoringCenter() {
   const [activeTab, setActiveTab] = useState<"live" | "delayed" | "critical">("live");
   const { showToast } = useToast();
+  const { data: rawTasks = [], loading } = useAsync(listTasks);
 
-  const mockTasks = [
-    { id: "T-101", title: "Deliver Medical Kit", assignee: "Rahul M.", status: "On the way", duration: "15m", priority: "High" },
-    { id: "T-102", title: "Survey House Water Level", assignee: "Sita P.", status: "In Progress", duration: "45m", priority: "Medium" },
-    { id: "T-103", title: "Distribute Relief Packages", assignee: "Amit K.", status: "Accepted", duration: "5m", priority: "Low" }
-  ];
+  const mappedTasks = rawTasks.map(task => ({
+    id: "T-" + task.id.substring(task.id.length - 4).toUpperCase(),
+    title: task.aiSuggestedAction || "Field Operation",
+    assignee: task.assignedTo ? "Assigned Vol" : "Pending", // Would lookup name if we aggregated
+    status: task.status,
+    duration: "15m",
+    priority: task.priorityScore > 8 ? "High" : task.priorityScore > 5 ? "Medium" : "Low",
+    raw: task
+  }));
+
+  const activeTasks = mappedTasks.filter(t => t.status === "OPEN" || t.status === "IN_PROGRESS");
+  const delayedTasks = mappedTasks.filter(t => t.priority === "High" && t.status !== "COMPLETED"); // Simple mock for delayed
+  const criticalTasks = mappedTasks.filter(t => t.priority === "High");
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -66,7 +77,9 @@ export default function TaskMonitoringCenter() {
                        </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                       {mockTasks.map((task, i) => (
+                       {loading && activeTasks.length === 0 ? (
+                         <tr><td colSpan={6} className="p-6 text-center text-slate-400">Loading tasks...</td></tr>
+                       ) : activeTasks.map((task, i) => (
                           <tr key={i} className="hover:bg-slate-50/50 transition-colors group">
                              <td className="p-6">
                                <span className="bg-slate-50 px-3 py-1.5 rounded-xl text-[10px] font-black font-mono text-slate-400 border border-slate-100 uppercase tracking-widest">{task.id}</span>
@@ -80,15 +93,15 @@ export default function TaskMonitoringCenter() {
                              </td>
                              <td className="p-6">
                                <div className="flex items-center gap-3">
-                                  <div className="w-8 h-8 rounded-xl bg-brand-peach overflow-hidden shadow-sm">
-                                    <img src={`https://i.pravatar.cc/100?u=${task.id}`} alt="User" />
+                                  <div className="w-8 h-8 rounded-xl bg-brand-peach overflow-hidden shadow-sm flex items-center justify-center text-brand-orange font-bold text-xs">
+                                    {task.assignee.charAt(0)}
                                   </div>
                                   <span className="text-sm text-slate-500 font-bold">{task.assignee}</span>
                                </div>
                              </td>
                              <td className="p-6">
                                <div className="flex items-center gap-3">
-                                  <div className={`w-2 h-2 rounded-full ${task.status === 'On the way' ? 'bg-brand-orange animate-pulse shadow-[0_0_8px_rgba(255,179,123,0.5)]' : 'bg-brand-green'}`}></div>
+                                  <div className={`w-2 h-2 rounded-full ${task.status === 'IN_PROGRESS' ? 'bg-brand-orange animate-pulse shadow-[0_0_8px_rgba(255,179,123,0.5)]' : 'bg-brand-green'}`}></div>
                                   <span className="text-xs font-bold text-slate-500">{task.status}</span>
                                </div>
                              </td>
@@ -102,6 +115,9 @@ export default function TaskMonitoringCenter() {
                              </td>
                           </tr>
                        ))}
+                       {!loading && activeTasks.length === 0 && (
+                         <tr><td colSpan={6} className="p-6 text-center text-slate-400">No active tasks found.</td></tr>
+                       )}
                     </tbody>
                  </table>
                </div>

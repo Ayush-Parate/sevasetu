@@ -15,4 +15,10 @@ async function listNeeds() {
   return Need.find({}).sort({ createdAt: -1 }).lean();
 }
 
-module.exports = { createNeed, listNeeds };
+async function updateNeedStatus(id, status) {
+  const need = await Need.findByIdAndUpdate(id, { status }, { new: true });
+  if (!need) throw new Error("Need not found");
+  return need.toJSON();
+}
+
+module.exports = { createNeed, listNeeds, updateNeedStatus };

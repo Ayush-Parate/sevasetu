@@ -13,63 +13,12 @@ import {
   ArrowUpRight,
   ShieldCheck
 } from "lucide-react";
-
-const opportunities = [
-  {
-    id: 1,
-    title: "Clean Water Grid: Purulia",
-    ngo: "Water Relief Foundation",
-    location: "West Bengal, India",
-    goal: "$25,000",
-    raised: "$18,200",
-    backers: 42,
-    impact: "2k families",
-    urgency: "HIGH",
-    category: "WASH",
-    image: "https://images.unsplash.com/photo-1542810634-71277d95dcbb?q=80&w=800&auto=format&fit=crop"
-  },
-  {
-    id: 2,
-    title: "Mobile Learning Lab",
-    ngo: "Udaan Trust",
-    location: "Kolkata Slums",
-    goal: "$12,000",
-    raised: "$3,500",
-    backers: 12,
-    impact: "500 children",
-    urgency: "MEDIUM",
-    category: "Education",
-    image: "https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?q=80&w=800&auto=format&fit=crop"
-  },
-  {
-    id: 3,
-    title: "Acute Malnutrition Center",
-    ngo: "HealthFirst NGO",
-    location: "Sunderbans",
-    goal: "$45,000",
-    raised: "$12,000",
-    backers: 8,
-    impact: "1k infants",
-    urgency: "CRITICAL",
-    category: "Healthcare",
-    image: "https://images.unsplash.com/photo-1541600391513-39ac10850269?q=80&w=800&auto=format&fit=crop"
-  },
-  {
-    id: 4,
-    title: "Skill Up: Empowering Women",
-    ngo: "Asha Foundation",
-    location: "Siliguri Rural",
-    goal: "$8,000",
-    raised: "$7,200",
-    backers: 35,
-    impact: "150 women",
-    urgency: "LOW",
-    category: "Livelihood",
-    image: "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?q=80&w=800&auto=format&fit=crop"
-  }
-];
+import { useAsync } from "../../lib/useAsync";
+import { getDonorMarketplace } from "../../lib/api";
 
 export default function ProjectMarketplace() {
+  const { data: opportunities = [], loading } = useAsync(getDonorMarketplace);
+
   return (
     <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
       {/* Search and Filters */}
@@ -98,6 +47,9 @@ export default function ProjectMarketplace() {
       </div>
 
       {/* High Priority Needs Grid */}
+      {loading ? (
+        <div className="flex items-center justify-center py-20 text-slate-400">Loading marketplace opportunities...</div>
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
          {opportunities.map((item, i) => {
            const progress = (parseInt(item.raised.replace('$', '').replace(',', '')) / parseInt(item.goal.replace('$', '').replace(',', ''))) * 100;
@@ -181,6 +133,7 @@ export default function ProjectMarketplace() {
            );
          })}
       </div>
+      )}
 
       {/* Marketplace CTA */}
       <div className="bg-slate-900 rounded-[40px] p-12 text-white relative overflow-hidden group">

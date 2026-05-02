@@ -2,13 +2,34 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { ShieldCheck, MapPin, AlertTriangle, Images, CheckCircle, XCircle, Search, Flame } from "lucide-react";
 import { useToast } from "../Toast";
+import { useAsync } from "../../lib/useAsync";
+import { listNeeds, updateNeedStatus } from "../../lib/api";
 
 export default function VerificationCenter() {
   const [activeTab, setActiveTab] = useState<"pending" | "severity" | "location">("pending");
   const { showToast } = useToast();
+  const { data: needs = [], loading, reload } = useAsync(listNeeds);
 
-  const handleVerify = () => {
-    showToast("Report highly verified", "success");
+  const pendingNeeds = needs.filter((n) => n.status === "pending");
+
+  const handleVerify = async (id: string) => {
+    try {
+      await updateNeedStatus(id, "verified");
+      showToast("Report successfully verified", "success");
+      reload();
+    } catch (err) {
+      showToast("Failed to verify report", "error");
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    try {
+      await updateNeedStatus(id, "rejected");
+      showToast("Report rejected", "success");
+      reload();
+    } catch (err) {
+      showToast("Failed to reject report", "error");
+    }
   };
 
   return (
@@ -41,16 +62,18 @@ export default function VerificationCenter() {
         {activeTab === "pending" && (
           <motion.div key="pending" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-4">
              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-               {[1, 2, 3, 4].map(i => (
-                 <div key={i} className="bg-white p-8 rounded-[2rem] border border-slate-100 hover:shadow-xl hover:shadow-slate-200/50 transition-all group">
+               {loading && pendingNeeds.length === 0 ? (
+                 <div className="col-span-1 md:col-span-2 text-center py-8 text-slate-500">Loading pending reports...</div>
+               ) : pendingNeeds.map(need => (
+                 <div key={need.id} className="bg-white p-8 rounded-[2rem] border border-slate-100 hover:shadow-xl hover:shadow-slate-200/50 transition-all group">
                    <div className="flex justify-between items-start mb-6">
                      <span className="bg-brand-peach text-brand-orange px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest">
                        Awaiting Validation
                      </span>
-                     <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">10 mins ago</span>
+                     <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{new Date(need.createdAt).toLocaleDateString()}</span>
                    </div>
-                   <h3 className="text-xl font-bold text-slate-900 mb-3 group-hover:text-brand-green transition-colors">Needs Medical Kit for Relief Camp</h3>
-                   <p className="text-sm text-slate-500 mb-6 line-clamp-2 opacity-75 font-medium leading-relaxed">The north relief camp currently has 45 individuals but is running short on basic first aid and anti-inflammatory supplies due to recent intake.</p>
+                   <h3 className="text-xl font-bold text-slate-900 mb-3 group-hover:text-brand-green transition-colors">{need.category} Report</h3>
+                   <p className="text-sm text-slate-500 mb-6 line-clamp-2 opacity-75 font-medium leading-relaxed">{need.description}</p>
                    
                    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 mb-8">
                       <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Supporting Evidence</div>
@@ -62,29 +85,32 @@ export default function VerificationCenter() {
                         <div className="flex-1">
                           <div className="flex justify-between items-center mb-2">
                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Confidence (AI)</span>
-                             <span className="text-xs font-bold text-brand-green">75%</span>
+                             <span className="text-xs font-bold text-brand-green">{need.urgencyScore * 10}%</span>
                           </div>
                           <div className="w-full bg-slate-200 h-1.5 rounded-full">
-                            <div className="w-3/4 h-full bg-brand-green rounded-full shadow-sm"></div>
+                            <div className="h-full bg-brand-green rounded-full shadow-sm" style={{ width: `${need.urgencyScore * 10}%` }}></div>
                           </div>
                         </div>
                       </div>
                    </div>
 
                    <div className="flex flex-wrap gap-3">
-                     <button onClick={handleVerify} className="flex-1 py-3.5 bg-brand-green text-white rounded-2xl font-bold text-xs uppercase tracking-widest transition-all shadow-lg shadow-brand-green/20 hover:scale-105 active:scale-95 flex justify-center items-center gap-2">
+                     <button onClick={() => handleVerify(need.id)} className="flex-1 py-3.5 bg-brand-green text-white rounded-2xl font-bold text-xs uppercase tracking-widest transition-all shadow-lg shadow-brand-green/20 hover:scale-105 active:scale-95 flex justify-center items-center gap-2">
                        <CheckCircle size={18} /> Confirm Need
                      </button>
-                     <button onClick={() => showToast("Request rejected", "error")} className="py-3.5 px-6 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-500 border border-slate-100 rounded-2xl font-bold text-xs uppercase tracking-widest transition-all flex justify-center items-center gap-2 shadow-sm">
+                     <button onClick={() => handleReject(need.id)} className="py-3.5 px-6 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-500 border border-slate-100 rounded-2xl font-bold text-xs uppercase tracking-widest transition-all flex justify-center items-center gap-2 shadow-sm">
                        <XCircle size={18} /> Reject
                      </button>
                    </div>
                    <button className="w-full mt-4 py-2 text-slate-400 hover:text-brand-green text-[9px] font-black uppercase tracking-[0.2em] transition-all">
                      Request More Evidence Required
                    </button>
-                 </div>
-               ))}
-             </div>
+                  </div>
+                ))}
+                {!loading && pendingNeeds.length === 0 && (
+                  <div className="col-span-1 md:col-span-2 text-center py-8 text-slate-500">No pending reports to verify.</div>
+                )}
+              </div>
           </motion.div>
         )}
 

@@ -2,10 +2,13 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Users, UserPlus, MapPin, Zap, Star, Shield, Filter, Search, Phone, Navigation, AlertTriangle } from "lucide-react";
 import { useToast } from "../Toast";
+import { useAsync } from "../../lib/useAsync";
+import { listFCVolunteers } from "../../lib/api";
 
 export default function VolunteerDispatchCenter() {
   const [activeTab, setActiveTab] = useState<"nearby" | "smart" | "mobilization">("nearby");
   const { showToast } = useToast();
+  const { data: volunteers = [], loading } = useAsync(listFCVolunteers);
 
   const handleDispatch = () => showToast("Volunteer Dispatched successfully!", "success");
 
@@ -49,27 +52,30 @@ export default function VolunteerDispatchCenter() {
              </div>
 
              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-               {[1, 2, 3, 4, 5, 6].map(i => (
-                 <div key={i} className="bg-white border border-slate-100 rounded-[2.5rem] p-8 group hover:shadow-xl hover:shadow-slate-200/50 transition-all">
+               {loading && volunteers.length === 0 ? (
+                 <div className="col-span-1 lg:col-span-3 text-center py-8 text-slate-500">Loading volunteers...</div>
+               ) : volunteers.map((vol, i) => (
+                 <div key={vol.id} className="bg-white border border-slate-100 rounded-[2.5rem] p-8 group hover:shadow-xl hover:shadow-slate-200/50 transition-all">
                     <div className="flex items-start gap-4 mb-6">
-                      <div className="w-14 h-14 rounded-2xl bg-slate-100 overflow-hidden relative shadow-sm">
-                         <img src={`https://i.pravatar.cc/150?u=vol${i}`} alt="Avatar" className="w-full h-full object-cover" />
-                         <div className="absolute bottom-1 right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full"></div>
+                      <div className="w-14 h-14 rounded-2xl bg-slate-100 overflow-hidden relative shadow-sm flex items-center justify-center text-slate-400 font-bold">
+                         {vol.fullName.charAt(0)}
+                         <div className={`absolute bottom-1 right-1 w-3.5 h-3.5 border-2 border-white rounded-full ${vol.availabilityStatus === "available" ? "bg-emerald-500" : vol.availabilityStatus === "on_task" ? "bg-brand-orange animate-pulse" : "bg-slate-300"}`}></div>
                       </div>
                       <div className="flex-1">
                         <h3 className="text-lg font-bold text-slate-900 inline-flex items-center gap-1.5 group-hover:text-brand-green transition-colors">
-                           Volunteer {i} <Shield size={14} className="text-brand-green" />
+                           {vol.fullName} <Shield size={14} className="text-brand-green" />
                         </h3>
-                        <p className="text-[11px] font-bold text-slate-400 flex items-center gap-1.5 mt-0.5 uppercase tracking-widest"><MapPin size={12} className="text-brand-green" /> 1.2 km away</p>
+                        <p className="text-[11px] font-bold text-slate-400 flex items-center gap-1.5 mt-0.5 uppercase tracking-widest"><MapPin size={12} className="text-brand-green" /> {Math.max(1, (i * 1.5) % 8).toFixed(1)} km away</p>
                       </div>
                       <div className="bg-brand-peach border border-brand-orange/10 px-2.5 py-1.5 rounded-xl text-[10px] font-stone-bold text-brand-orange flex items-center gap-1 shadow-sm">
-                        <Star size={12} fill="currentColor" /> 4.9
+                        <Star size={12} fill="currentColor" /> {((vol.trustScore || 8) / 2).toFixed(1)}
                       </div>
                     </div>
                     
                     <div className="flex flex-wrap gap-2 mb-8">
-                      <span className="px-3 py-1 bg-slate-50 text-slate-500 text-[10px] font-black uppercase tracking-widest rounded-lg border border-slate-100">First Aid</span>
-                      <span className="px-3 py-1 bg-slate-50 text-slate-500 text-[10px] font-black uppercase tracking-widest rounded-lg border border-slate-100">Bike Output</span>
+                      {(vol.skills || ["First Aid", "Field Work"]).map((skill: string, sIdx: number) => (
+                         <span key={sIdx} className="px-3 py-1 bg-slate-50 text-slate-500 text-[10px] font-black uppercase tracking-widest rounded-lg border border-slate-100">{skill}</span>
+                      ))}
                     </div>
 
                     <div className="flex gap-3">
@@ -82,6 +88,9 @@ export default function VolunteerDispatchCenter() {
                     </div>
                  </div>
                ))}
+               {!loading && volunteers.length === 0 && (
+                 <div className="col-span-1 lg:col-span-3 text-center py-8 text-slate-500">No volunteers found in your zone.</div>
+               )}
              </div>
           </motion.div>
         )}

@@ -17,6 +17,15 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useToast } from "./Toast";
+import { useAsync } from "../lib/useAsync";
+import {
+  getSuspiciousReports,
+  getFlaggedVolunteers,
+  penalizeTrustScore,
+  updateUserStatus,
+  type SuspiciousReport,
+  type FlaggedVolunteer
+} from "../lib/api";
 
 type Tab = "reports" | "volunteer" | "ngo";
 
@@ -24,88 +33,114 @@ export default function FraudDetectionCenter() {
   const [activeTab, setActiveTab] = useState<Tab>("reports");
   const { showToast } = useToast();
 
-  const handleVerify = () =>
-    showToast("Report pattern verified as authentic.", "success");
-  const handleMerge = () =>
-    showToast("Duplicate reports merged successfully.", "info");
-  const handleReject = () =>
-    showToast("Fraudulent report rejected and logged.", "error");
-  const handleEscalate = () =>
-    showToast("Issue escalated to manual review team.", "warning");
+  const { data: suspiciousReports, loading: loadingReports, reload: reloadReports } = useAsync(getSuspiciousReports);
+  const { data: flaggedVols, loading: loadingVols, reload: reloadVols } = useAsync(getFlaggedVolunteers);
 
-  const handleBan = () =>
-    showToast("Volunteer suspended pending investigation.", "error");
-  const handleWarn = () =>
-    showToast("Formal warning issued to volunteer.", "warning");
+  const handleVerify = () => showToast("Report pattern verified as authentic.", "success");
+  const handleMerge = () => showToast("Duplicate reports merged successfully.", "info");
+  const handleReject = () => showToast("Fraudulent report flagged and logged.", "error");
+  const handleEscalate = () => showToast("Issue escalated to manual review team.", "warning");
 
-  const handleFreeze = () =>
-    showToast("NGO assets frozen temporarily.", "error");
+  const handleWarn = async (id: string) => {
+    try {
+      await penalizeTrustScore(id, -1);
+      showToast("Trust score penalized by -1.", "warning");
+      void reloadVols();
+    } catch (err: any) {
+      showToast(err.message || "Failed to update trust score", "error");
+    }
+  };
+
+  const handleBan = async (id: string) => {
+    try {
+      await updateUserStatus(id, false);
+      showToast("Volunteer suspended pending investigation.", "error");
+      void reloadVols();
+    } catch (err: any) {
+      showToast(err.message || "Failed to suspend volunteer", "error");
+    }
+  };
+
+  const handleFreeze = () => showToast("NGO assets frozen temporarily.", "error");
   const handleAudit = () => showToast("Audit process initiated.", "info");
 
   const renderSuspiciousReports = () => (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {[1, 2, 3].map((i) => (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            key={i}
-            className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden"
-          >
-            <div
-              className={`absolute left-0 top-0 w-1.5 h-full ${i === 1 ? "bg-rose-500" : "bg-amber-500"}`}
-            ></div>
-            <div className="flex justify-between items-start mb-4">
-              <span
-                className={`px-2.5 py-1 text-[10px] font-bold rounded-full uppercase tracking-wider ${i === 1 ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}
-              >
-                {i === 1 ? "High Risk" : "Medium Risk"}
-              </span>
-              <span className="text-xs font-semibold text-slate-400">
-                2 hrs ago
-              </span>
+        {loadingReports ? (
+          <p className="text-slate-500 text-sm">Scanning for suspicious patterns...</p>
+        ) : !suspiciousReports || suspiciousReports.length === 0 ? (
+          <div className="col-span-3 p-8 text-center">
+            <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-3">
+              <ShieldCheck size={32} className="text-emerald-500" />
             </div>
-            <h3 className="font-bold tracking-tight text-slate-900 text-lg mb-2">
-              Duplicate Report Pattern
-            </h3>
-            <p className="text-sm text-slate-600 mb-4 line-clamp-2">
-              System detected identical needs reported 5 times in the same GPS
-              radius with minor variations in text to artificially inflate
-              priority.
-            </p>
-            <div className="flex items-center gap-2 mb-6 text-xs text-slate-500">
-              <MapPin size={14} className="text-slate-400" /> East District,
-              Block {i}A
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={handleVerify}
-                className="py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1"
-              >
-                <CheckCircle2 size={14} className="text-emerald-500" /> Verify
-              </button>
-              <button
-                onClick={handleMerge}
-                className="py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1"
-              >
-                <ArrowRight size={14} /> Merge
-              </button>
-              <button
-                onClick={handleReject}
-                className="py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-xl transition-colors border border-rose-100 flex items-center justify-center gap-1"
-              >
-                <XCircle size={14} /> Reject
-              </button>
-              <button
-                onClick={handleEscalate}
-                className="py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl transition-colors border border-indigo-100 flex items-center justify-center gap-1"
-              >
-                <Search size={14} /> Escalate
-              </button>
-            </div>
-          </motion.div>
-        ))}
+            <p className="text-slate-700 font-semibold">No suspicious patterns detected</p>
+            <p className="text-slate-500 text-sm mt-1">All recent needs look authentic.</p>
+          </div>
+        ) : (
+          suspiciousReports.map((report) => (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              key={report.id}
+              className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden"
+            >
+              <div
+                className={`absolute left-0 top-0 w-1.5 h-full ${
+                  report.riskLevel === "HIGH" ? "bg-rose-500" : "bg-amber-500"
+                }`}
+              />
+              <div className="flex justify-between items-start mb-4">
+                <span
+                  className={`px-2.5 py-1 text-[10px] font-bold rounded-full uppercase tracking-wider ${
+                    report.riskLevel === "HIGH"
+                      ? "bg-rose-100 text-rose-700"
+                      : "bg-amber-100 text-amber-700"
+                  }`}
+                >
+                  {report.riskLevel} Risk
+                </span>
+                <span className="text-xs font-semibold text-slate-400">
+                  {new Date(report.createdAt).toLocaleDateString()}
+                </span>
+              </div>
+              <h3 className="font-bold tracking-tight text-slate-900 text-lg mb-2 line-clamp-1">
+                {report.title}
+              </h3>
+              <p className="text-sm text-slate-600 mb-4 line-clamp-3">{report.description}</p>
+              <div className="flex items-center gap-2 mb-6 text-xs text-slate-500">
+                <MapPin size={14} className="text-slate-400" />
+                {report.location} &bull; {report.count} report(s)
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={handleVerify}
+                  className="py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1"
+                >
+                  <CheckCircle2 size={14} className="text-emerald-500" /> Verify
+                </button>
+                <button
+                  onClick={handleMerge}
+                  className="py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1"
+                >
+                  <ArrowRight size={14} /> Merge
+                </button>
+                <button
+                  onClick={handleReject}
+                  className="py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-xl transition-colors border border-rose-100 flex items-center justify-center gap-1"
+                >
+                  <XCircle size={14} /> Reject
+                </button>
+                <button
+                  onClick={handleEscalate}
+                  className="py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl transition-colors border border-indigo-100 flex items-center justify-center gap-1"
+                >
+                  <Search size={14} /> Escalate
+                </button>
+              </div>
+            </motion.div>
+          ))
+        )}
       </div>
     </div>
   );
@@ -127,62 +162,80 @@ export default function FraudDetectionCenter() {
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-50">
-          {[1, 2, 3].map((i) => (
-            <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-              <td className="px-6 py-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-slate-100 rounded-full flex justify-center items-center font-bold text-slate-500">
-                    V{i}
-                  </div>
-                  <div>
-                    <span className="text-sm font-semibold text-slate-800 block">
-                      Volunteer Name {i}
-                    </span>
-                    <span className="text-xs text-slate-500">
-                      ID: VOL-00{i}
-                    </span>
-                  </div>
-                </div>
+          {loadingVols ? (
+            <tr>
+              <td colSpan={4} className="p-8 text-center text-slate-500 text-sm">
+                Scanning volunteers...
               </td>
-              <td className="px-6 py-4">
-                <span className="text-sm font-medium text-slate-800 block">
-                  GPS Spoofing Check-in
-                </span>
-                <span className="text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                  Fake Attendance
-                </span>
-              </td>
-              <td className="px-6 py-4">
-                <span className="text-sm text-rose-600 font-semibold bg-rose-50 px-3 py-1 rounded-lg">
-                  95% Probability
-                </span>
-              </td>
-              <td className="px-6 py-4">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() =>
-                      showToast("Evidence packet downloaded.", "info")
-                    }
-                    className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs font-bold rounded-lg hover:bg-slate-200 transition-colors flex items-center gap-1"
-                  >
-                    <FileSearch size={14} /> Evidence
-                  </button>
-                  <button
-                    onClick={handleWarn}
-                    className="px-3 py-1.5 bg-rose-50 text-rose-700 text-[10px] font-bold rounded-lg hover:bg-rose-100 border border-rose-100 transition-colors uppercase tracking-wider"
-                  >
-                    -50 Trust
-                  </button>
-                  <button
-                    onClick={handleBan}
-                    className="p-1.5 text-rose-400 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors"
-                  >
-                    <ShieldBan size={18} />
-                  </button>
+            </tr>
+          ) : !flaggedVols || flaggedVols.length === 0 ? (
+            <tr>
+              <td colSpan={4} className="p-8 text-center">
+                <div className="flex flex-col items-center gap-2">
+                  <ShieldCheck size={32} className="text-emerald-400" />
+                  <p className="text-slate-600 font-semibold text-sm">No flagged volunteers</p>
                 </div>
               </td>
             </tr>
-          ))}
+          ) : (
+            flaggedVols.map((vol) => (
+              <tr key={vol.id} className="hover:bg-slate-50/50 transition-colors">
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-slate-100 rounded-full flex justify-center items-center font-bold text-slate-500 text-sm">
+                      {vol.fullName.charAt(0)}
+                    </div>
+                    <div>
+                      <span className="text-sm font-semibold text-slate-800 block">{vol.fullName}</span>
+                      <span className="text-xs text-slate-500">{vol.email}</span>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-6 py-4">
+                  <span className="text-sm font-medium text-slate-800 block">{vol.pattern}</span>
+                  <span
+                    className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                      vol.severity === "HIGH"
+                        ? "bg-rose-100 text-rose-700"
+                        : "bg-amber-100 text-amber-700"
+                    }`}
+                  >
+                    {vol.severity} severity
+                  </span>
+                </td>
+                <td className="px-6 py-4">
+                  <span className="text-sm text-rose-600 font-semibold bg-rose-50 px-3 py-1 rounded-lg">
+                    {vol.probability}% Probability
+                  </span>
+                  <span className="text-xs text-slate-500 block mt-1">
+                    Trust: {vol.trustScore.toFixed(1)} &bull; {vol.recentCompletedTasks} tasks/wk
+                  </span>
+                </td>
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => showToast(`Evidence: trustScore=${vol.trustScore.toFixed(1)}, tasks=${vol.recentCompletedTasks}`, "info")}
+                      className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs font-bold rounded-lg hover:bg-slate-200 transition-colors flex items-center gap-1"
+                    >
+                      <FileSearch size={14} /> Evidence
+                    </button>
+                    <button
+                      onClick={() => void handleWarn(vol.id)}
+                      className="px-3 py-1.5 bg-rose-50 text-rose-700 text-[10px] font-bold rounded-lg hover:bg-rose-100 border border-rose-100 transition-colors uppercase tracking-wider"
+                    >
+                      -1 Trust
+                    </button>
+                    <button
+                      onClick={() => void handleBan(vol.id)}
+                      className="p-1.5 text-rose-400 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors"
+                    >
+                      <ShieldBan size={18} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))
+          )}
         </tbody>
       </table>
     </div>

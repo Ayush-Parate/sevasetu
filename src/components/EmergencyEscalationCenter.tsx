@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useToast } from "./Toast";
+import { useAsync } from "../lib/useAsync";
+import { getEmergencyStats } from "../lib/api";
 
 type Tab = "alerts" | "volunteers" | "ngo" | "queue" | "collaboration";
 
@@ -30,6 +32,7 @@ export default function EmergencyEscalationCenter() {
   const [activeTab, setActiveTab] = useState<Tab>("alerts");
   const [emergencyMode, setEmergencyMode] = useState(false);
   const { showToast } = useToast();
+  const { data: stats } = useAsync(getEmergencyStats);
 
   const handleAction = (action: string) => {
     showToast(`${action} activated!`, "warning");
@@ -49,7 +52,7 @@ export default function EmergencyEscalationCenter() {
         </div>
         <div className="flex items-baseline gap-2 mb-1 relative z-10">
           <span className="text-4xl font-black text-rose-700 tracking-tight">
-            14
+            {stats?.criticalNeeds ?? "..."}
           </span>
           <span className="text-xs font-bold text-rose-500 flex items-center">
             Zones
@@ -72,7 +75,7 @@ export default function EmergencyEscalationCenter() {
         </div>
         <div className="flex items-baseline gap-2 mb-1 relative z-10">
           <span className="text-4xl font-black text-amber-700 tracking-tight">
-            420
+            {stats?.availableVolunteers ?? "..."}
           </span>
           <span className="text-xs font-bold text-amber-600 flex items-center">
             Avail.
@@ -118,7 +121,7 @@ export default function EmergencyEscalationCenter() {
         </div>
         <div className="flex items-baseline gap-2 mb-1 relative z-10">
           <span className="text-4xl font-black text-emerald-700 tracking-tight">
-            12
+            {stats?.activeNGOs ?? "..."}
           </span>
           <span className="text-xs font-bold text-emerald-600 flex items-center">
             Active

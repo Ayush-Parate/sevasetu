@@ -10,6 +10,7 @@ const fileRoutes = require("../modules/fileProcessing/routes");
 const publicIntakeRoutes = require("../modules/publicIntake/routes");
 const matchRoutes = require("./match.routes");
 const impactPublicRoutes = require("./impact.routes");
+const adminRoutes = require("../modules/admin/routes");
 
 const router = express.Router();
 
@@ -35,5 +36,6 @@ router.use("/impact", impactPublicRoutes);
 router.use("/files", fileRoutes);
 router.use("/public", publicIntakeRoutes);
 router.use("/match-volunteers", matchRoutes);
+router.use("/admin", adminRoutes);
 
 module.exports = router;

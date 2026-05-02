@@ -18,4 +18,13 @@ async function listUsers() {
   }));
 }
 
-module.exports = { listUsers };
+async function updateUserStatus(userId, isActive) {
+  const user = await User.findById(userId);
+  if (!user) throw { statusCode: 404, message: "User not found" };
+  if (user.role === "SUPER_ADMIN") throw { statusCode: 403, message: "Cannot modify super admin status" };
+  user.isActive = isActive;
+  await user.save();
+  return { id: user.id, isActive: user.isActive };
+}
+
+module.exports = { listUsers, updateUserStatus };

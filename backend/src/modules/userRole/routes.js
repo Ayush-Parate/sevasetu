@@ -1,5 +1,5 @@
 const express = require("express");
-const { getUsers } = require("./controller");
+const { getUsers, updateStatus } = require("./controller");
 const { authenticate, attachUser, authorize } = require("../../middlewares/auth.middleware");
 const { ROLES } = require("../../constants/roles");
 
@@ -11,6 +11,14 @@ router.get(
   attachUser(),
   authorize([ROLES.SUPER_ADMIN, ROLES.NGO_ADMIN, ROLES.FIELD_COORDINATOR]),
   getUsers
+);
+
+router.patch(
+  "/:id/status",
+  authenticate,
+  attachUser(),
+  authorize([ROLES.SUPER_ADMIN]),
+  updateStatus
 );
 
 module.exports = router;

@@ -21,106 +21,160 @@ import NGOApprovalView from "./NGOApprovalView";
 import NGOProfileView from "./NGOProfileView";
 import SuspendedNGOView from "./SuspendedNGOView";
 import { useToast } from "./Toast";
+import { useAsync } from "../lib/useAsync";
+import {
+  listUsers,
+  listPublicRequests,
+  updatePublicRequestStatus,
+  approvePublicRequest,
+  updateUserStatus,
+  type ListedUser,
+  type PublicRequestRecord
+} from "../lib/api";
 
 type OrgTab = "active" | "approval" | "suspended";
 
 export default function OrganizationManagement() {
   const [activeTab, setActiveTab] = useState<OrgTab>("active");
-  const [selectedOrgId, setSelectedOrgId] = useState<number | null>(null);
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
   const { showToast } = useToast();
 
   const handleBack = () => setSelectedOrgId(null);
 
+  const { data: rawUsers, reload: reloadUsers, loading: loadingUsers } = useAsync(listUsers);
+  const { data: rawRequests, reload: reloadRequests, loading: loadingRequests } = useAsync(() =>
+    listPublicRequests({ requestType: "NGO_REGISTRATION" })
+  );
+
+  const activeNGOs = (rawUsers || []).filter((u) => u.role === "NGO_ADMIN" && u.isActive === true);
+  const suspendedNGOs = (rawUsers || []).filter((u) => u.role === "NGO_ADMIN" && u.isActive === false);
+  const pendingApprovals = (rawRequests || []).filter((r) => r.status === "NEW" || r.status === "IN_REVIEW");
+
   if (selectedOrgId !== null) {
-    if (activeTab === "approval")
-      return <NGOApprovalView onBack={handleBack} />;
+    if (activeTab === "approval") return <NGOApprovalView onBack={handleBack} />;
     if (activeTab === "active") return <NGOProfileView onBack={handleBack} />;
-    if (activeTab === "suspended")
-      return <SuspendedNGOView onBack={handleBack} />;
+    if (activeTab === "suspended") return <SuspendedNGOView onBack={handleBack} />;
   }
 
-  const handleApprove = () =>
-    showToast("Organization approved successfully.", "success");
-  const handleReject = () => showToast("Organization rejected.", "error");
-  const handleSuspend = () =>
-    showToast("Organization suspended remotely.", "warning");
-  const handleRevoke = () => showToast("Certification revoked.", "error");
-  const handleInvestigate = () =>
-    showToast("Investigation tracking initialized.", "info");
-  const handleBan = () =>
-    showToast("Permanent ban assigned to organization.", "error");
+  const generateTempPassword = () => {
+    return Math.random().toString(36).slice(-8) + "Aa1!";
+  };
+
+  const handleApprove = async (id: string) => {
+    try {
+      const tempPass = generateTempPassword();
+      await approvePublicRequest(id, {
+        role: "NGO_ADMIN",
+        tempPassword: tempPass
+      });
+      showToast(`Organization approved. Temporary password: ${tempPass}`, "success");
+      void reloadRequests();
+      void reloadUsers();
+    } catch (err: any) {
+      showToast(err.message || "Failed to approve organization", "error");
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    try {
+      await updatePublicRequestStatus(id, { status: "REJECTED" });
+      showToast("Organization rejected.", "error");
+      void reloadRequests();
+    } catch (err: any) {
+      showToast(err.message || "Failed to reject organization", "error");
+    }
+  };
+
+  const handleSuspend = async (id: string, activate = false) => {
+    try {
+      await updateUserStatus(id, activate);
+      showToast(activate ? "Organization activated." : "Organization suspended.", "success");
+      void reloadUsers();
+    } catch (err: any) {
+      showToast(err.message || "Failed to update organization status", "error");
+    }
+  };
+
   const handleDocs = () => showToast("Opening document vault...", "info");
 
   const renderApprovalQueue = () => (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {[1, 2, 3].map((i) => (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            key={i}
-            className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm"
-          >
-            <div className="flex justify-between items-start mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-amber-500">
-                  <Building2 size={24} />
+        {loadingRequests ? (
+          <p className="text-slate-500 text-sm">Loading requests...</p>
+        ) : pendingApprovals.length === 0 ? (
+          <p className="text-slate-500 text-sm">No pending approvals.</p>
+        ) : (
+          pendingApprovals.map((req) => (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              key={req.id}
+              className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm"
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-amber-500">
+                    <Building2 size={24} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 line-clamp-1">
+                      {req.organizationName || req.fullName}
+                    </h3>
+                    <p className="text-xs text-slate-500">Reg: {req.id.substring(0, 8)}</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-bold text-slate-900">
-                    New Hope Foundation
-                  </h3>
-                  <p className="text-xs text-slate-500">Reg: 2024-NGO-{i}92</p>
+                <span className="px-2.5 py-1 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-full uppercase tracking-wider">
+                  {req.status}
+                </span>
+              </div>
+
+              <div className="space-y-3 mb-6">
+                <div className="flex items-center gap-2 text-sm text-slate-600">
+                  <Mail size={16} className="text-slate-400" />
+                  <span className="truncate">{req.email}</span>
+                </div>
+                {req.phone && (
+                  <div className="flex items-center gap-2 text-sm text-slate-600">
+                    <PhoneCall size={16} className="text-slate-400" />
+                    {req.phone}
+                  </div>
+                )}
+                <div className="flex items-center gap-2 text-sm text-amber-600 font-medium">
+                  <Shield size={16} />
+                  Pending Review
                 </div>
               </div>
-              <span className="px-2.5 py-1 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-full uppercase tracking-wider">
-                Pending
-              </span>
-            </div>
 
-            <div className="space-y-3 mb-6">
-              <div className="flex items-center gap-2 text-sm text-slate-600">
-                <MapPin size={16} className="text-slate-400" />
-                South Region, District 4
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => void handleApprove(req.id)}
+                  className="py-2 bg-brand-green text-white text-xs font-bold rounded-xl hover:brightness-110 transition-all flex items-center justify-center gap-1"
+                >
+                  <CheckCircle2 size={14} /> Approve
+                </button>
+                <button
+                  onClick={() => setSelectedOrgId(req.id)}
+                  className="py-2 bg-slate-50 text-slate-600 text-xs font-bold rounded-xl border border-slate-100 hover:bg-slate-100 transition-all flex items-center justify-center gap-1"
+                >
+                  <Eye size={14} /> Review
+                </button>
+                <button
+                  onClick={handleDocs}
+                  className="py-2 bg-slate-50 text-slate-600 text-xs font-bold rounded-xl border border-slate-100 hover:bg-slate-100 transition-all flex items-center justify-center gap-1"
+                >
+                  <FileText size={14} /> Docs
+                </button>
+                <button
+                  onClick={() => void handleReject(req.id)}
+                  className="py-2 bg-rose-50 text-rose-600 text-xs font-bold rounded-xl border border-rose-100 hover:bg-rose-100 transition-all flex items-center justify-center gap-1"
+                >
+                  <XCircle size={14} /> Reject
+                </button>
               </div>
-              <div className="flex items-center gap-2 text-sm text-slate-600">
-                <FileText size={16} className="text-slate-400" />
-                Education & Healthcare
-              </div>
-              <div className="flex items-center gap-2 text-sm text-amber-600 font-medium">
-                <Shield size={16} />
-                3/4 Documents Verified
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={handleApprove}
-                className="py-2 bg-brand-green text-white text-xs font-bold rounded-xl hover:brightness-110 transition-all flex items-center justify-center gap-1"
-              >
-                <CheckCircle2 size={14} /> Approve
-              </button>
-              <button
-                onClick={() => setSelectedOrgId(i)}
-                className="py-2 bg-slate-50 text-slate-600 text-xs font-bold rounded-xl border border-slate-100 hover:bg-slate-100 transition-all flex items-center justify-center gap-1"
-              >
-                <Eye size={14} /> Review
-              </button>
-              <button
-                onClick={handleDocs}
-                className="py-2 bg-slate-50 text-slate-600 text-xs font-bold rounded-xl border border-slate-100 hover:bg-slate-100 transition-all flex items-center justify-center gap-1"
-              >
-                <FileText size={14} /> Docs
-              </button>
-              <button
-                onClick={handleReject}
-                className="py-2 bg-rose-50 text-rose-600 text-xs font-bold rounded-xl border border-rose-100 hover:bg-rose-100 transition-all flex items-center justify-center gap-1"
-              >
-                <XCircle size={14} /> Reject
-              </button>
-            </div>
-          </motion.div>
-        ))}
+            </motion.div>
+          ))
+        )}
       </div>
     </div>
   );
@@ -154,73 +208,87 @@ export default function OrganizationManagement() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
-                      <Building2 size={20} />
-                    </div>
-                    <div>
-                      <span className="text-sm font-semibold text-slate-800 block">
-                        Global Reach Initiative {i}
-                      </span>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-xs text-slate-500">
-                          ID: GRI-00{i}
-                        </span>
-                        <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 rounded font-medium">
-                          Verified
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-2">
-                    <div className="text-xl font-bold text-slate-800">
-                      9.{i}
-                    </div>
-                    <div className="text-xs text-brand-green font-medium">
-                      Excellent
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex flex-col gap-1">
-                    <div className="text-sm font-medium text-slate-700">
-                      {124 * i} Needs Solved
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      {12 * i} Active Volunteers
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex flex-col gap-1">
-                    <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-full uppercase tracking-wider w-max">
-                      Active
-                    </span>
-                    <span className="text-xs text-slate-500">
-                      North & West Districts
-                    </span>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setSelectedOrgId(i)}
-                      className="px-3 py-1.5 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg hover:bg-slate-200 transition-colors"
-                    >
-                      Profile
-                    </button>
-                    <button className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 rounded-lg transition-colors">
-                      <MoreVertical size={16} />
-                    </button>
-                  </div>
+            {loadingUsers ? (
+              <tr>
+                <td colSpan={5} className="p-8 text-center text-slate-500 text-sm">
+                  Loading NGOs...
                 </td>
               </tr>
-            ))}
+            ) : activeNGOs.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="p-8 text-center text-slate-500 text-sm">
+                  No active NGOs found.
+                </td>
+              </tr>
+            ) : (
+              activeNGOs.map((org) => (
+                <tr key={org.id} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                        <Building2 size={20} />
+                      </div>
+                      <div>
+                        <span className="text-sm font-semibold text-slate-800 block">
+                          {org.fullName}
+                        </span>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-xs text-slate-500">
+                            ID: {org.id.substring(0, 8)}
+                          </span>
+                          <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 rounded font-medium">
+                            Verified
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                      <div className="text-xl font-bold text-slate-800">
+                        {(org.trustScore || 0).toFixed(1)}
+                      </div>
+                      <div className="text-xs text-brand-green font-medium">
+                        {(org.trustScore || 0) >= 8 ? "Excellent" : "Good"}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-col gap-1">
+                      <div className="text-sm font-medium text-slate-700">
+                        -
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        -
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-col gap-1">
+                      <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-full uppercase tracking-wider w-max">
+                        Active
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setSelectedOrgId(org.id)}
+                        className="px-3 py-1.5 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg hover:bg-slate-200 transition-colors"
+                      >
+                        Profile
+                      </button>
+                      <button
+                        onClick={() => void handleSuspend(org.id, false)}
+                        className="px-3 py-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 text-xs font-bold rounded-lg transition-colors"
+                      >
+                        Suspend
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -240,61 +308,69 @@ export default function OrganizationManagement() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
-            {[1, 2].map((i) => (
-              <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-rose-50 flex items-center justify-center text-rose-500">
-                      <AlertTriangle size={20} />
-                    </div>
-                    <div>
-                      <span className="text-sm font-semibold text-slate-800 block">
-                        CareConnect {i}
-                      </span>
-                      <span className="text-xs text-slate-500">
-                        Suspended: Oct 12, 2023
-                      </span>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <span className="text-sm text-slate-700 font-medium">
-                    Compliance Violation
-                  </span>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex flex-col gap-1 text-xs text-slate-600">
-                    <span className="flex items-center gap-1.5">
-                      <XCircle size={12} className="text-rose-500" /> Fraudulent
-                      Impact Reports
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <XCircle size={12} className="text-rose-500" /> Expired
-                      Operating License
-                    </span>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        setSelectedOrgId(i);
-                        handleInvestigate();
-                      }}
-                      className="px-3 py-1.5 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg hover:bg-slate-200 transition-colors"
-                    >
-                      Investigate
-                    </button>
-                    <button
-                      onClick={handleBan}
-                      className="px-3 py-1.5 bg-rose-50 text-rose-600 text-xs font-bold rounded-lg hover:bg-rose-100 transition-colors"
-                    >
-                      Ban
-                    </button>
-                  </div>
+            {loadingUsers ? (
+              <tr>
+                <td colSpan={4} className="p-8 text-center text-slate-500 text-sm">
+                  Loading suspended NGOs...
                 </td>
               </tr>
-            ))}
+            ) : suspendedNGOs.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="p-8 text-center text-slate-500 text-sm">
+                  No suspended NGOs found.
+                </td>
+              </tr>
+            ) : (
+              suspendedNGOs.map((org) => (
+                <tr key={org.id} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-rose-50 flex items-center justify-center text-rose-500">
+                        <AlertTriangle size={20} />
+                      </div>
+                      <div>
+                        <span className="text-sm font-semibold text-slate-800 block">
+                          {org.fullName}
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          Suspended ID: {org.id.substring(0, 8)}
+                        </span>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="text-sm text-slate-700 font-medium">
+                      Admin Action
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-col gap-1 text-xs text-slate-600">
+                      <span className="flex items-center gap-1.5">
+                        <XCircle size={12} className="text-rose-500" /> Account deactivated
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setSelectedOrgId(org.id);
+                        }}
+                        className="px-3 py-1.5 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg hover:bg-slate-200 transition-colors"
+                      >
+                        Profile
+                      </button>
+                      <button
+                        onClick={() => void handleSuspend(org.id, true)}
+                        className="px-3 py-1.5 bg-emerald-50 text-emerald-600 text-xs font-bold rounded-lg hover:bg-emerald-100 transition-colors"
+                      >
+                        Activate
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -333,7 +409,7 @@ export default function OrganizationManagement() {
           >
             Approval Queue
             <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] rounded-full">
-              12
+              {pendingApprovals.length}
             </span>
           </button>
           <button
@@ -346,7 +422,7 @@ export default function OrganizationManagement() {
           >
             Suspended
             <span className="px-2 py-0.5 bg-rose-100 text-rose-700 text-[10px] rounded-full">
-              4
+              {suspendedNGOs.length}
             </span>
           </button>
         </div>

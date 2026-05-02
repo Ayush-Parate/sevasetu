@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
   ShieldCheck,
   Lock,
@@ -11,8 +11,12 @@ import {
   Key,
   Activity,
   Clock,
+  Users,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { useAsync } from "../lib/useAsync";
+import { getRoleDistribution, listUsers } from "../lib/api";
+import { useToast } from "./Toast";
 
 type Tab = "matrix" | "logs";
 
@@ -45,25 +49,67 @@ const PERMISSIONS = [
 export default function RolePermissionCenter() {
   const [activeTab, setActiveTab] = useState<Tab>("matrix");
   const [selectedRole, setSelectedRole] = useState(ROLES[0]);
+  const { showToast } = useToast();
+
+  const { data: roleDistribution } = useAsync(getRoleDistribution);
+  const { data: users } = useAsync(listUsers);
+
+  // Persistent permission state per role — no more Math.random()
+  const defaultPermissions: Record<string, Record<string, boolean>> = {};
+  ROLES.forEach((role) => {
+    defaultPermissions[role] = {};
+    PERMISSIONS.forEach((group) => {
+      group.rights.forEach((right) => {
+        // NGO Admins get most permissions, others progressively fewer
+        const roleIdx = ROLES.indexOf(role);
+        defaultPermissions[role][right] = roleIdx <= 1;
+      });
+    });
+  });
+  // Override specific rights
+  defaultPermissions["Volunteer"]["Create Tasks"] = true;
+  defaultPermissions["Verifier"]["View Analytics"] = true;
+  defaultPermissions["Donor"]["View Analytics"] = true;
+
+  const [permissions, setPermissions] = useState<Record<string, Record<string, boolean>>>(defaultPermissions);
+
+  const togglePermission = useCallback((role: string, right: string) => {
+    setPermissions((prev) => ({
+      ...prev,
+      [role]: {
+        ...prev[role],
+        [right]: !prev[role]?.[right]
+      }
+    }));
+    showToast(`Permission "${right}" updated for ${role}.`, "success");
+  }, [showToast]);
 
   const renderMatrix = () => (
     <div className="space-y-6">
       {/* Top Actions */}
       <div className="flex flex-col sm:flex-row justify-between gap-4">
         <div className="flex gap-2 shrink-0 overflow-x-auto pb-2 custom-scrollbar">
-          {ROLES.map((role) => (
-            <button
-              key={role}
-              onClick={() => setSelectedRole(role)}
-              className={`px-4 py-2 text-sm font-semibold rounded-lg whitespace-nowrap transition-all ${
-                selectedRole === role
-                  ? "bg-slate-900 text-white shadow-md"
-                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
-              }`}
-            >
-              {role}
-            </button>
-          ))}
+          {ROLES.map((role) => {
+            const dist = roleDistribution?.find((r) => r.role.toLowerCase().replace(/ /g, "_") === role.toLowerCase().replace(/ /g, "_") || r.role === role);
+            return (
+              <button
+                key={role}
+                onClick={() => setSelectedRole(role)}
+                className={`px-4 py-2 text-sm font-semibold rounded-lg whitespace-nowrap transition-all flex items-center gap-2 ${
+                  selectedRole === role
+                    ? "bg-slate-900 text-white shadow-md"
+                    : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                {role}
+                {dist && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-green/20 text-brand-green font-bold">
+                    {dist.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
         <div className="flex gap-2 shrink-0">
           <button className="px-4 py-2 bg-indigo-50 text-indigo-700 text-sm font-semibold rounded-lg border border-indigo-100 flex items-center gap-2 hover:bg-indigo-100 transition-colors">
@@ -102,22 +148,27 @@ export default function RolePermissionCenter() {
               </h4>
               <div className="space-y-3">
                 {group.rights.map((right) => {
-                  const isGranted = Math.random() > 0.4; // Simulation
+                  const isGranted = permissions[selectedRole]?.[right] ?? false;
                   return (
                     <div
                       key={right}
                       className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100 shadow-sm"
                     >
-                      <span className="text-sm font-medium text-slate-700">
-                        {right}
-                      </span>
-                      <div
-                        className={`w-10 h-5 rounded-full relative transition-colors ${isGranted ? "bg-brand-green" : "bg-slate-200"}`}
+                      <span className="text-sm font-medium text-slate-700">{right}</span>
+                      <button
+                        type="button"
+                        onClick={() => togglePermission(selectedRole, right)}
+                        aria-label={`Toggle ${right}`}
+                        className={`w-10 h-5 rounded-full relative transition-colors ${
+                          isGranted ? "bg-brand-green" : "bg-slate-200"
+                        }`}
                       >
                         <div
-                          className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${isGranted ? "left-5.5 right-0.5" : "left-0.5"}`}
-                        ></div>
-                      </div>
+                          className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${
+                            isGranted ? "left-[22px]" : "left-0.5"
+                          }`}
+                        />
+                      </button>
                     </div>
                   );
                 })}
@@ -158,56 +209,45 @@ export default function RolePermissionCenter() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 text-xs font-bold">
-                      U{i}
-                    </div>
-                    <div>
-                      <span className="text-sm font-semibold text-slate-800 block">
-                        User Name {i}
-                      </span>
-                      <span className="text-[10px] text-slate-500 uppercase tracking-widest">
-                        {ROLES[i % ROLES.length]}
-                      </span>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <span
-                    className={`px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${
-                      i % 3 === 0
-                        ? "bg-amber-100 text-amber-700"
-                        : "bg-slate-100 text-slate-700"
-                    }`}
-                  >
-                    {i % 3 === 0 ? "Data Export" : "View Profile"}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-sm text-slate-600 font-medium">
-                  {i % 3 === 0
-                    ? "/api/reports/ngo/export"
-                    : "/api/users/profile"}
-                </td>
-                <td className="px-6 py-4 text-sm text-slate-500">
-                  <div className="flex items-center gap-1.5">
-                    <Clock size={14} /> Oct 24, 14:32:0{i}
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-2">
-                    <button className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs font-bold rounded-lg hover:bg-slate-200 transition-colors flex items-center gap-1">
-                      <Search size={14} /> Investigate
-                    </button>
-                    <button className="px-3 py-1.5 bg-rose-50 text-rose-700 text-xs font-bold rounded-lg hover:bg-rose-100 transition-colors flex items-center gap-1">
-                      <Lock size={14} /> Restrict
-                    </button>
-                  </div>
-                </td>
+            {!users || users.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="p-8 text-center text-slate-500 text-sm">Loading users...</td>
               </tr>
-            ))}
+            ) : (
+              users.slice(0, 8).map((u) => (
+                <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 text-xs font-bold">
+                        {u.fullName.charAt(0)}
+                      </div>
+                      <div>
+                        <span className="text-sm font-semibold text-slate-800 block">{u.fullName}</span>
+                        <span className="text-[10px] text-slate-500 uppercase tracking-widest">{u.role}</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase bg-slate-100 text-slate-700">
+                      View Profile
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-slate-600 font-medium">/api/users/{u.id.substring(0, 8)}</td>
+                  <td className="px-6 py-4 text-sm text-slate-500">
+                    <div className="flex items-center gap-1.5">
+                      <Clock size={14} /> {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "—"}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                      <button className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs font-bold rounded-lg hover:bg-slate-200 transition-colors flex items-center gap-1">
+                        <Search size={14} /> Investigate
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

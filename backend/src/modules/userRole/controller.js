@@ -6,4 +6,14 @@ const getUsers = asyncHandler(async (_req, res) => {
   res.json({ success: true, data: users });
 });
 
-module.exports = { getUsers };
+const updateStatus = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { isActive } = req.body;
+  if (typeof isActive !== "boolean") {
+    return res.status(400).json({ success: false, message: "isActive must be a boolean" });
+  }
+  const result = await service.updateUserStatus(id, isActive);
+  res.json({ success: true, data: result });
+});
+
+module.exports = { getUsers, updateStatus };

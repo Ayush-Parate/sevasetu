@@ -15,7 +15,7 @@ import { motion, AnimatePresence } from "motion/react";
 import UserProfileView from "./UserProfileView";
 import { useToast } from "./Toast";
 import AccessRequestManagement from "./AccessRequestManagement";
-import { listUsers, type ListedUser } from "../lib/api";
+import { listUsers, updateUserStatus, type ListedUser } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
 
 type UserTab = "all" | "high_impact" | "flagged" | "requests";
@@ -58,7 +58,15 @@ export default function UserManagement() {
     return <UserProfileView user={selectedUser} onBack={() => setSelectedUserId(null)} />;
   }
 
-  const handleSuspend = () => showToast("Suspend user when PATCH /users is implemented.", "warning");
+  const handleSuspend = async (userId: string, currentStatus: boolean) => {
+    try {
+      await updateUserStatus(userId, !currentStatus);
+      showToast(`User ${currentStatus ? "suspended" : "activated"} successfully.`, "success");
+      void reload();
+    } catch (err: any) {
+      showToast(err.message || "Failed to update user status.", "error");
+    }
+  };
   const handleReward = () => showToast("Rewards will use impact analytics when wired.", "success");
 
   const renderAllUsers = () => (
@@ -172,9 +180,10 @@ export default function UserManagement() {
                         </button>
                         <button
                           type="button"
-                          className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 rounded-lg transition-colors"
+                          onClick={() => void handleSuspend(user.id, active)}
+                          className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${active ? "bg-rose-50 text-rose-600 hover:bg-rose-100" : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"}`}
                         >
-                          <MoreVertical size={16} />
+                          {active ? "Suspend" : "Activate"}
                         </button>
                       </div>
                     </td>
@@ -312,7 +321,7 @@ export default function UserManagement() {
                   </button>
                   <button
                     type="button"
-                    onClick={handleSuspend}
+                    onClick={() => void handleSuspend(user.id, user.isActive !== false)}
                     className="px-3 py-1.5 bg-rose-50 text-rose-600 text-xs font-bold rounded-lg hover:bg-rose-100 transition-colors"
                   >
                     Suspend

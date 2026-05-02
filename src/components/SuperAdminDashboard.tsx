@@ -39,7 +39,8 @@ import Settings from "./Settings";
 import SupportAndGovernance from "./SupportAndGovernance";
 import BillingAndSubscriptionCenter from "./BillingAndSubscriptionCenter";
 import RoleLiveMap from "./RoleLiveMap";
-import { getBackendHealth } from "../lib/api";
+import { getBackendHealth, getAdminStats } from "../lib/api";
+import { useAsync } from "../lib/useAsync";
 
 function BackendHealthBanner() {
   const [health, setHealth] = useState<{ status: string; uptimeSeconds: number; timestamp: string } | null>(
@@ -194,6 +195,7 @@ export default function SuperAdminDashboard({
 }) {
   const [activeView, setActiveView] = useState<ActiveView>("dashboard");
   const [searchQuery, setSearchQuery] = useState("");
+  const { data: stats, loading: statsLoading } = useAsync(getAdminStats);
 
   const renderDashboard = () => (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -221,9 +223,8 @@ export default function SuperAdminDashboard({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Total Active NGOs"
-          value="482"
-          subValue="12 pending approval • 4 suspended"
-          trend={{ value: "+8% vs last month", isUp: true }}
+          value={statsLoading ? "..." : (stats?.activeNGOs?.toString() ?? "0")}
+          subValue="Registered entities"
           buttonLabel="View Organizations"
           onClick={() => setActiveView("organizations")}
           icon={Building2}
@@ -231,9 +232,8 @@ export default function SuperAdminDashboard({
         />
         <StatCard
           title="Total Users"
-          value="12.4k"
-          subValue="8.2k active now • 420 top performers"
-          trend={{ value: "+12.4% new signups", isUp: true }}
+          value={statsLoading ? "..." : (stats?.totalUsers?.toLocaleString() ?? "0")}
+          subValue="Across all roles"
           buttonLabel="View Users"
           onClick={() => setActiveView("users")}
           icon={Users}
@@ -241,9 +241,8 @@ export default function SuperAdminDashboard({
         />
         <StatCard
           title="Active Needs"
-          value="1,842"
-          subValue="240 urgent • 12 pending verification"
-          trend={{ value: "+4.2% since yesterday", isUp: true }}
+          value={statsLoading ? "..." : (stats?.activeNeeds?.toLocaleString() ?? "0")}
+          subValue="Total reported needs"
           buttonLabel="Open Need Intelligence"
           onClick={() => setActiveView("needs")}
           icon={LayoutDashboard}
@@ -270,9 +269,8 @@ export default function SuperAdminDashboard({
         />
         <StatCard
           title="Completed Tasks"
-          value="28.5k"
-          subValue="1,240 completed today"
-          trend={{ value: "98.2% success rate", isUp: true }}
+          value={statsLoading ? "..." : (stats?.completedTasks?.toLocaleString() ?? "0")}
+          subValue="Total historical resolution"
           buttonLabel="Task Performance"
           onClick={() => setActiveView("analytics")}
           icon={CheckCircle2}

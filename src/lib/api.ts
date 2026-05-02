@@ -502,3 +502,94 @@ export async function getImpactTask(taskId: string) {
 export async function getImpactArea(location: string) {
   return request<any>(`/impact-analytics/area/${encodeURIComponent(location)}`, { method: "GET" });
 }
+
+export interface AdminStats {
+  totalUsers: number;
+  activeNGOs: number;
+  activeNeeds: number;
+  completedTasks: number;
+}
+
+export async function getAdminStats() {
+  return request<AdminStats>("/admin/stats", { method: "GET" });
+}
+
+export async function updateUserStatus(userId: string, isActive: boolean) {
+  return request<{ id: string; isActive: boolean }>(`/users/${userId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ isActive })
+  });
+}
+
+// ─── Fraud Detection ───────────────────────────────────────────────
+
+export interface SuspiciousReport {
+  id: string;
+  title: string;
+  location: string;
+  count: number;
+  riskLevel: "HIGH" | "MEDIUM";
+  description: string;
+  createdAt: string;
+}
+
+export interface FlaggedVolunteer {
+  id: string;
+  fullName: string;
+  email: string;
+  role: string;
+  trustScore: number;
+  recentCompletedTasks: number;
+  probability: number;
+  pattern: string;
+  severity: "HIGH" | "MEDIUM";
+}
+
+export async function getSuspiciousReports() {
+  return request<SuspiciousReport[]>("/admin/fraud/suspicious-reports", { method: "GET" });
+}
+
+export async function getFlaggedVolunteers() {
+  return request<FlaggedVolunteer[]>("/admin/fraud/flagged-volunteers", { method: "GET" });
+}
+
+export async function penalizeTrustScore(userId: string, delta: number) {
+  return request<{ id: string; trustScore: number }>(`/admin/fraud/volunteers/${userId}/trust`, {
+    method: "PATCH",
+    body: JSON.stringify({ delta })
+  });
+}
+
+// ─── Platform Analytics ─────────────────────────────────────────────
+
+export interface PlatformAnalytics {
+  totalUsers: number;
+  totalNeeds: number;
+  totalTasks: number;
+  completedTasks: number;
+  openTasks: number;
+  resolutionRate: number;
+  roleDistribution: Record<string, number>;
+  userGrowth: Array<{ label: string; count: number }>;
+}
+
+export async function getPlatformAnalytics() {
+  return request<PlatformAnalytics>("/admin/analytics", { method: "GET" });
+}
+
+// ─── Emergency Stats ─────────────────────────────────────────────────
+
+export interface EmergencyStats {
+  criticalNeeds: number;
+  urgentNeeds: number;
+  availableVolunteers: number;
+  activeNGOs: number;
+}
+
+export async function getEmergencyStats() {
+  return request<EmergencyStats>("/admin/emergency-stats", { method: "GET" });
+}
+
+export async function getRoleDistribution() {
+  return request<Array<{ role: string; count: number }>>("/admin/role-distribution", { method: "GET" });
+}
